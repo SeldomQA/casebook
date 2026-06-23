@@ -1,0 +1,60 @@
+__pycache__
+.cache
+.eggs
+*.egg-info
+*.pyc
+build
+dist
+
+# Codecov
+.coverage
+coverage.xml
+cobertura-coverage.xml
+
+# IDE Specific files/folders
+## Pycharm IDE - Jetbrains
+.idea/*
+.vscode/*
+
+## PyDev IDE - Eclipse
+.settings/
+.loadpath
+.metadata
+tmp/
+*.bak
+*.project
+*.pydevproject
+*.tmp
+local.properties
+
+## Vim
+*.swp
+
+### YouCompleteMe
+.ycm_extra_conf.py
+
+# JS files/folders
+## node / npm
+node_modules/
+
+# MacOS files
+.DS_Store
+
+# Pipenv files
+Pipfile.lock
+
+# pytest folders
+.pytest_cache
+
+# tox folders
+.tox
+
+# sphinx/read the docs
+docs/_build/
+
+*.html
+assets/
+
+.nyc_output
+
+.venv/
