@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Casebook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <header class="app-bar">
+    <div class="app-bar-left">
+      <button class="app-bar-menu" id="sidebarToggle" type="button" aria-label="Toggle sidebar" aria-expanded="true">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="app-brand">CASEBOOK</div>
+    </div>
+    <div class="app-bar-version">v{{ casebook_version }}</div>
+  </header>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Sidebar">
+      <section class="nav-section tree-section">
+        <div class="sidebar-static">
+          <div class="sidebar-heading">
+            <div>
+              <h2>Case Files</h2>
+              <p id="summaryText">Loading cases...</p>
+            </div>
+            <button class="outline-button" id="refreshButton" type="button">Refresh</button>
+          </div>
+          <p class="scan-dirs" id="scanDirs">Loading...</p>
+        </div>
+        <nav class="tree-panel" id="treePanel"></nav>
+      </section>
+      <div class="sidebar-resizer" id="sidebarResizer" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" tabindex="0"></div>
+    </aside>
+
+    <main class="workspace">
+      <section class="notice" id="reloadNotice" hidden>
+        <span>The YAML files changed while you were editing.</span>
+        <button type="button" id="reloadNowButton">Reload now</button>
+      </section>
+
+      <section class="empty-state" id="emptyState">
+        <h3>No file selected</h3>
+        <p>Choose a YAML file from the Case Files navigation to review and edit its cases.</p>
+      </section>
+
+      <section class="file-view" id="fileView" hidden>
+        <section class="file-meta-card" id="fileMeta"></section>
+        <div class="metrics" id="metrics"></div>
+        <div class="content-grid">
+          <section class="content-card cases-card">
+            <div class="case-list-controls">
+              <div class="card-actions case-card-actions">
+                <div class="filter-group" id="priorityFilters"></div>
+                <input id="caseSearch" class="search-input" type="search" placeholder="Filter current file">
+              </div>
+            </div>
+            <div class="case-table-head" aria-hidden="true">
+              <span></span>
+              <span>ID</span>
+              <span>Title</span>
+              <span>Priority</span>
+              <span>Type</span>
+              <span>Tags</span>
+              <span></span>
+            </div>
+            <div class="case-list" id="caseRows"></div>
+            <div class="empty-state compact" id="noResults" hidden>
+              <h3>No matching cases</h3>
+              <p>Adjust the current file filter and try again.</p>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <aside class="drawer" id="editorDrawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div>
+        <p class="eyebrow">edit case</p>
+        <h2 id="drawerTitle">Untitled</h2>
+      </div>
+      <button class="drawer-close-button" id="closeDrawerButton" type="button" aria-label="Close editor"></button>
+    </div>
+
+    <form id="caseForm" class="case-form">
+      <label>
+        <span>case id</span>
+        <code class="readonly-value" id="fieldId"></code>
+      </label>
+      <label>
+        <span>title</span>
+        <input id="fieldTitle" type="text">
+      </label>
+      <label>
+        <span>description</span>
+        <textarea id="fieldDescription" rows="4"></textarea>
+      </label>
+      <div class="form-grid">
+        <label>
+          <span>priority</span>
+          <select id="fieldPriority">
+            <option>P0</option>
+            <option>P1</option>
+            <option>P2</option>
+          </select>
+        </label>
+        <label>
+          <span>type</span>
+          <input id="fieldType" type="text">
+        </label>
+      </div>
+      <label>
+        <span>tags</span>
+        <textarea id="fieldTags" rows="3"></textarea>
+      </label>
+      <label>
+        <span>preconditions</span>
+        <textarea id="fieldPreconditions" rows="4"></textarea>
+      </label>
+      <label>
+        <span>steps</span>
+        <textarea id="fieldSteps" rows="6"></textarea>
+      </label>
+      <label>
+        <span>expected results</span>
+        <textarea id="fieldExpectedResults" rows="6"></textarea>
+      </label>
+      <label class="checkbox-row">
+        <span>automated case</span>
+        <input id="fieldAuto" type="checkbox">
+      </label>
+    </form>
+
+    <div class="drawer-actions">
+      <div class="action-spacer"></div>
+      <button class="primary-button" id="saveCaseButton" type="button">Save</button>
+    </div>
+  </aside>
+  <div class="scrim" id="drawerScrim" hidden></div>
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "casebook"
+version = "0.1.0"
+description = "A local browser and editor for YAML test cases."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["flask>=3.1.3", "ruamel.yaml>=0.18.6", "watchdog>=4.0.0"]
+
+[project.scripts]
+casebook = "casebook.cli:main"
+
+[tool.setuptools]
+packages = ["casebook"]
+package-dir = { "casebook" = "." }
+
+[tool.setuptools.package-data]
+casebook = ["templates/*.html", "static/*.css", "static/*.js"]

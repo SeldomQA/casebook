@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from threading import RLock
+from typing import Any
+
+
+class MarksStore:
+    def __init__(self, project_root: Path):
+        self.project_root = project_root.resolve()
+        self.path = self.project_root / ".casebook" / "marks.json"
+        self._lock = RLock()
+
+    def _load(self) -> dict[str, Any]:
+        if not self.path.exists():
+            return {}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _save(self, marks: dict[str, Any]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(
+            json.dumps(marks, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def all(self) -> dict[str, Any]:
+        with self._lock:
+            return self._load()
+
+    def key(self, file_path: str, case_id: str) -> str:
+        return f"{file_path}#{case_id}"
+
+    def toggle_needs_update(self, file_path: str, case_id: str) -> dict[str, Any]:
+        with self._lock:
+            marks = self._load()
+            key = self.key(file_path, case_id)
+            current = marks.get(key)
+            if current and current.get("needs_update"):
+                marks.pop(key, None)
+                marked = False
+            else:
+                marks[key] = {
+                    "needs_update": True,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                marked = True
+            self._save(marks)
+            return {"key": key, "marked": marked, "marks": marks}
