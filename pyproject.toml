@@ -15,7 +15,6 @@ casebook = "casebook.cli:main"
 
 [tool.setuptools]
 packages = ["casebook"]
-package-dir = { "casebook" = "." }
 
 [tool.setuptools.package-data]
 casebook = ["templates/*.html", "static/*.css", "static/*.js"]
