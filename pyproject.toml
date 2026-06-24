@@ -17,4 +17,14 @@ casebook = "casebook.cli:main"
 packages = ["casebook"]
 
 [tool.setuptools.package-data]
-casebook = ["templates/*.html", "static/*.css", "static/*.js"]
+casebook = [
+  "templates/*.html",
+  "static/*.css",
+  "static/*.js",
+  "project_template/AGENTS.md",
+  "project_template/.agents/skills/casebook-test-cases/SKILL.md",
+  "project_template/.vscode/settings.json",
+  "project_template/docs/requirements/login.md",
+  "project_template/releases/example/login.yaml",
+  "project_template/schema/test-case-schema.json",
+]
