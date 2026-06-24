@@ -1,0 +1,73 @@
+metadata:
+  module: "系统认证"
+  feature: "用户登录"
+  owner: "henry.hu"
+  last_reviewed: "2026-06-24"
+  tags: [asset:core, mode:mixed, biz:smoke, login]
+
+test_cases:
+  - id: "TC_LOGIN_001"
+    title: "有效用户名和密码登录成功"
+    description: "验证用户使用正确的登录凭证可以成功进入系统。"
+    priority: "P0"
+    type: "functional"
+    preconditions:
+      - 用户已注册并处于正常可登录状态
+    steps:
+      - 输入有效用户名和对应密码
+      - 点击登录按钮
+    expected_results:
+      - 登录成功，进入系统首页
+      - 显示当前用户姓名和欢迎信息
+    tags: [smoke, login]
+    auto: true
+
+  - id: "TC_LOGIN_002"
+    title: "密码错误时登录失败"
+    description: "验证用户输入有效用户名但错误密码时，登录失败并提示密码错误。"
+    priority: "P1"
+    type: "functional"
+    preconditions:
+      - 用户已注册并处于正常可登录状态
+    steps:
+      - 输入有效用户名
+      - 输入错误的密码
+      - 点击登录按钮
+    expected_results:
+      - 登录失败，保持在登录页面
+      - 页面显示错误提示：用户名或密码不正确
+    tags: [login, negative]
+    auto: false
+
+  - id: "TC_LOGIN_003"
+    title: "连续三次错误密码后提示图形验证码"
+    description: "验证用户连续三次登录失败后，系统要求输入图形验证码进行校验。"
+    priority: "P2"
+    type: "security"
+    preconditions:
+      - 用户已注册并处于正常可登录状态
+    steps:
+      - 依次使用相同用户名输入错误密码三次并尝试登录
+      - 在第四次登录时观察登录页面变化
+    expected_results:
+      - 前三次登录失败，显示密码错误提示
+      - 第四次登录页面出现图形验证码输入框
+      - 必须输入正确验证码才能继续登录
+    tags: [login, security]
+    auto: false
+
+  - id: "TC_LOGIN_004"
+    title: "禁用账户登录被拒绝"
+    description: "验证被管理员禁用的账户无法登录系统，并提示账户已被禁用。"
+    priority: "P1"
+    type: "business"
+    preconditions:
+      - 用户账户状态为禁用
+    steps:
+      - 输入该禁用用户的用户名和密码
+      - 点击登录按钮
+    expected_results:
+      - 登录失败，保持在登录页面
+      - 页面显示提示：账户已被禁用，请联系管理员
+    tags: [login, negative]
+    auto: false

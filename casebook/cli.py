@@ -6,8 +6,6 @@ import sys
 import webbrowser
 from pathlib import Path
 
-from werkzeug.serving import make_server
-
 from . import __version__
 
 
@@ -46,10 +44,27 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Open the web UI in a browser")
     serve.add_argument("--no-watch", action="store_true",
                        help="Disable filesystem auto-refresh")
+
+    init = subparsers.add_parser(
+        "init",
+        aliases=["project"],
+        help="Create a new Casebook test case project",
+    )
+    init.add_argument(
+        "project",
+        help="Project directory to create or initialize",
+    )
+    init.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing scaffold files",
+    )
     return parser
 
 
 def run_serve(args: argparse.Namespace) -> int:
+    from werkzeug.serving import make_server
+
     from .app import create_app
 
     project_root = Path.cwd()
@@ -80,12 +95,39 @@ def run_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_init(args: argparse.Namespace) -> int:
+    from .initializer import ProjectInitError, init_project
+
+    try:
+        result = init_project(args.project, force=args.force)
+    except ProjectInitError as exc:
+        print(f"casebook init: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Initialized Casebook project at {result.project_root}")
+    if result.created:
+        print("\nCreated:")
+        for path in result.created:
+            print(f"  {path.as_posix()}")
+    if result.skipped:
+        print("\nSkipped existing files:")
+        for path in result.skipped:
+            print(f"  {path.as_posix()}")
+        print("\nUse --force to overwrite scaffold files.")
+    print("\nNext steps:")
+    print(f"  cd {result.project_root}")
+    print("  casebook serve releases")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     configure_logging()
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "serve":
         return run_serve(args)
+    if args.command in {"init", "project"}:
+        return run_init(args)
     parser.print_help()
     return 2
 

@@ -1,0 +1,12 @@
+{
+  "yaml.schemas": {
+    "./schema/test-case-schema.json": [
+      "releases/**/*.yaml"
+    ]
+  },
+  "editor.formatOnSave": true,
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.tabSize": 2
+  }
+}
