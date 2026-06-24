@@ -1,15 +1,22 @@
 from __future__ import annotations
 
-import argparse
 import logging
-import sys
 import webbrowser
 from pathlib import Path
+from typing import Annotated
+
+import typer
 
 from . import __version__
 
 
 LOGGER = logging.getLogger("casebook.main")
+
+app = typer.Typer(
+    help="Render, review, and edit YAML test cases locally.",
+    no_args_is_help=True,
+    add_completion=False,
+)
 
 
 def configure_logging() -> None:
@@ -20,117 +27,139 @@ def configure_logging() -> None:
     )
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="casebook",
-        description="Render, review, and edit YAML test cases locally.",
-    )
-    parser.add_argument("--version", action="version",
-                        version=f"casebook {__version__}")
-    subparsers = parser.add_subparsers(dest="command")
-
-    serve = subparsers.add_parser(
-        "serve", help="Start the local Casebook web UI")
-    serve.add_argument(
-        "paths",
-        nargs="*",
-        help="YAML case directories relative to the current project root",
-    )
-    serve.add_argument("--host", default="127.0.0.1",
-                       help="Host to bind (default: 127.0.0.1)")
-    serve.add_argument("--port", "-p", type=int, default=8089,
-                       help="Port to bind (default: 8089)")
-    serve.add_argument("--open", "-o", action="store_true",
-                       help="Open the web UI in a browser")
-    serve.add_argument("--no-watch", action="store_true",
-                       help="Disable filesystem auto-refresh")
-
-    init = subparsers.add_parser(
-        "init",
-        aliases=["project"],
-        help="Create a new Casebook test case project",
-    )
-    init.add_argument(
-        "project",
-        help="Project directory to create or initialize",
-    )
-    init.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite existing scaffold files",
-    )
-    return parser
+def version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"casebook {__version__}")
+        raise typer.Exit()
 
 
-def run_serve(args: argparse.Namespace) -> int:
+@app.callback()
+def root(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            help="Show the Casebook version and exit.",
+            callback=version_callback,
+            is_eager=True,
+        ),
+    ] = False,
+) -> None:
+    configure_logging()
+
+
+def serve_project(
+    paths: list[str],
+    host: str = "127.0.0.1",
+    port: int = 8089,
+    open_browser: bool = False,
+    watch: bool = True,
+) -> None:
     from werkzeug.serving import make_server
 
     from .app import create_app
 
     project_root = Path.cwd()
-    app = create_app(project_root=project_root,
-                     scan_dirs=args.paths, watch=not args.no_watch)
-    summary = app.config.get("CASEBOOK_INITIAL_SUMMARY", {})
-    url = f"http://{args.host}:{args.port}"
-    browser_url = f"http://localhost:{args.port}" if args.host in {
+    flask_app = create_app(project_root=project_root, scan_dirs=paths, watch=watch)
+    summary = flask_app.config.get("CASEBOOK_INITIAL_SUMMARY", {})
+    url = f"http://{host}:{port}"
+    browser_url = f"http://localhost:{port}" if host in {
         "127.0.0.1", "::"} else url
 
     LOGGER.info("Starting web interface at %s", url)
     LOGGER.info("Starting Casebook %s", __version__)
     LOGGER.info("Watching YAML cases in %s", ", ".join(
-        summary.get("scan_dirs", args.paths or [])))
+        summary.get("scan_dirs", paths or [])))
     LOGGER.info("Loaded %s files, %s cases", summary.get(
         "files", 0), summary.get("cases", 0))
 
-    if args.open:
+    if open_browser:
         webbrowser.open(browser_url)
 
-    server = make_server(args.host, args.port, app, threaded=True)
+    server = make_server(host, port, flask_app, threaded=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         LOGGER.info("Stopping Casebook")
     finally:
         server.server_close()
-    return 0
 
 
-def run_init(args: argparse.Namespace) -> int:
+@app.command(help="Start the local Casebook web UI.")
+def serve(
+    paths: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help="YAML case directories relative to the current project root.",
+        ),
+    ] = None,
+    host: Annotated[
+        str,
+        typer.Option("--host", help="Host to bind."),
+    ] = "127.0.0.1",
+    port: Annotated[
+        int,
+        typer.Option("--port", "-p", help="Port to bind."),
+    ] = 8089,
+    open_browser: Annotated[
+        bool,
+        typer.Option("--open", "-o", help="Open the web UI in a browser."),
+    ] = False,
+    no_watch: Annotated[
+        bool,
+        typer.Option("--no-watch", help="Disable filesystem auto-refresh."),
+    ] = False,
+) -> None:
+    serve_project(
+        paths=paths or [],
+        host=host,
+        port=port,
+        open_browser=open_browser,
+        watch=not no_watch,
+    )
+
+
+def initialize_project(project: str, force: bool = False) -> None:
     from .initializer import ProjectInitError, init_project
 
     try:
-        result = init_project(args.project, force=args.force)
+        result = init_project(project, force=force)
     except ProjectInitError as exc:
-        print(f"casebook init: {exc}", file=sys.stderr)
-        return 1
+        typer.echo(f"casebook init: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
-    print(f"Initialized Casebook project at {result.project_root}")
+    typer.echo(f"Initialized Casebook project at {result.project_root}")
     if result.created:
-        print("\nCreated:")
+        typer.echo("\nCreated:")
         for path in result.created:
-            print(f"  {path.as_posix()}")
+            typer.echo(f"  {path.as_posix()}")
     if result.skipped:
-        print("\nSkipped existing files:")
+        typer.echo("\nSkipped existing files:")
         for path in result.skipped:
-            print(f"  {path.as_posix()}")
-        print("\nUse --force to overwrite scaffold files.")
-    print("\nNext steps:")
-    print(f"  cd {result.project_root}")
-    print("  casebook serve releases")
-    return 0
+            typer.echo(f"  {path.as_posix()}")
+        typer.echo("\nUse --force to overwrite scaffold files.")
+    typer.echo("\nNext steps:")
+    typer.echo(f"  cd {result.project_root}")
+    typer.echo("  casebook serve releases")
 
 
-def main(argv: list[str] | None = None) -> int:
-    configure_logging()
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    if args.command == "serve":
-        return run_serve(args)
-    if args.command in {"init", "project"}:
-        return run_init(args)
-    parser.print_help()
-    return 2
+@app.command(help="Create a new Casebook test case project.")
+def init(
+    project: Annotated[
+        str,
+        typer.Argument(help="Project directory to create or initialize."),
+    ],
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite existing scaffold files."),
+    ] = False,
+) -> None:
+    initialize_project(project, force=force)
+
+
+def main(argv: list[str] | None = None) -> None:
+    app(args=argv)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
