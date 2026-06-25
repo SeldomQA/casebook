@@ -1,45 +1,65 @@
 # Casebook
 
-Casebook 是一个面向 AI 时代测试用例工作的本地工具。
+Casebook 是面向 AI Agent 时代的测试用例工程化工作流。
 
-它把需求文档、AI 测试设计规范、JSON Schema 约束、YAML 用例文件和可视化编辑界面连成一条完整工作流：
+> 测试工程师应该使用 Lingma、Trae、Codex、Claude Code、Cursor 等 AI Agent 在项目中理解需求、生成用例、重构用例；Casebook 负责把这些工程化用例变成可以本地浏览、评审、标记、执行和生成报告的工作台。
 
-![](./images/flow.png)
-
-Casebook 的目标不是替代测试人员，而是把测试人员从重复录入中释放出来：人负责需求理解、风险判断和评审，AI 负责按规范批量生成结构化用例，Casebook 负责可视化查看和编辑。
+Casebook 的目标不是替代测试人员，而是把测试人员从重复录入、表格搬运和平台维护里释放出来。
 
 
 ## 设计理念
 
-传统测试用例往往散落在表格、文档和测试管理平台里，格式难统一，版本难追踪，AI 也很难稳定复用。
+传统测试用例管理的常见思路是：上传需求到平台，生成 XMind 或 Excel，用例再被下载、导入、复制、维护。即使接入了 AI，本质上仍然是把 AI 包装进平台流程里，测试用例依旧是孤立的表格资产。
 
-Casebook 将用例工程化：
+Casebook 的设计从一开始就是 AI-native 的工程项目：
 
-- 用 `docs/requirements/` 承载需求输入。
-- 用 `.agents/skills/` 固化测试设计方法。
-- 用 `schema/` 固化结构约束。
-- 用 `releases/` 存放可版本化的 YAML 用例。
-- 用本地 Web UI 完成审阅、标记、编辑和执行。
+- 需求文档放在 `docs/requirements/`，成为 AI 理解业务的输入。
+- 测试设计方法写进 `.agents/skills/`，让 AI 知道如何像测试人员一样设计用例。
+- 用例结构由 `schema/test-case-schema.json` 约束，保证 AI 输出稳定可校验。
+- YAML 用例存放在 `releases/`，可以被 Git 管理、Code Review、回滚和追踪。
+- 评审标记、执行结果和报告数据独立保存，不污染用例定义。
+- 本地 Web UI 只负责查看、评审、标记、轻量编辑、执行和报告，不试图替代 AI Agent 的生成能力。
 
-这让测试用例变成可以被 AI 生成、被 schema 校验、被 Git 管理、被人高效评审和执行的工程资产。
+因此，Casebook 不是把 AI 当作平台上的一个“生成按钮”，而是把 AI Agent 当作测试用例工程的主要生产力。
 
 
-## 核心能力
+### Casebook 下的分工
 
-- 一条命令创建标准 Casebook 用例项目。
-- 将需求文档放入 `docs/requirements/`，让 AI 按项目技能包生成测试用例。
-- 使用 `schema/test-case-schema.json` 约束 YAML 用例格式。
-- 在本地 Web UI 中浏览、筛选、展开、标记和编辑 YAML 用例。
-- 按启动目录创建测试计划，记录用例通过、失败、阻塞和执行备注。
-- 使用 `casebook report` 从测试计划 JSON 生成 HTML 测试报告。
-- 保存编辑时直接回写原始 YAML 文件。
-- 使用 `ruamel.yaml` 尽量保留 YAML 注释、字段顺序、缩进和 inline list 风格。
-- 将标记状态保存在 `.casebook/marks.json`，不污染用例文件本身。
-- 监听 YAML 文件变化，并通知浏览器刷新。
+- 人负责判断：需求是否理解正确、风险是否覆盖充分、用例是否值得执行、失败是否真实有效。
+- AI Agent 负责生产：读取需求和技能包，生成、补充、删除、重构 YAML 用例。
+- Schema 负责约束：保证用例结构稳定，降低 AI 输出漂移。
+- Git 负责协作：让用例变成可审查、可追踪、可回滚的工程资产。
+- Casebook 负责工作台：浏览、筛选、标记、轻量编辑、执行统计和报告生成。
+
+## 完整工作流程
+
+Casebook 推荐的流程是一个闭环：
+
+![Casebook AI-native 测试用例工程流程](./images/flow.png)
+
+```text
+docs/requirements/ 需求文档
+  + .agents/skills/ 测试设计技能包
+  + schema/test-case-schema.json 格式约束
+    -> AI Agent 理解需求并生成 YAML 用例
+    -> releases/<需求或版本目录>/<功能>.yaml
+    -> casebook serve <需求或版本目录>
+    -> 本地浏览、评审、标记、轻量编辑、执行
+    -> .casebook/marks.json + test-runs/<run-id>.json
+    -> casebook report <run-file>
+    -> HTML 测试报告
+```
+
+这也是 Casebook 和传统平台最大的区别：
+
+| 对比维度 | 传统AI测试用例平台 | Casebook |
+| --- | --- | --- |
+| 工作中心 | 上传、生成、下载、导入 | 项目、Agent、Schema、Git、本地工作台、执行证据 |
+| 用例维护 | 留在页面表单里，通过 CRUD 逐条维护 | 交给 AI Agent 修改 YAML，把人的精力留给评审、执行和判断 |
+
 
 ## 安装
 
-Casebook 需要 Python 3.10 或更高版本。
 
 在本仓库中安装：
 
@@ -68,16 +88,35 @@ casebook --help
 
 ```
 
-## 快速开始
+## Casebook 使用旅程
 
-创建一个新的 Casebook 项目：
+下面用一个从需求到报告的完整闭环，快速跑通 Casebook。
+
+### 1. 创建用例工程
+
+先创建一个新的 Casebook 项目：
 
 ```bash
 casebook init my-casebook
 cd my-casebook
 ```
 
-启动本地用例工作台。推荐按需求目录或版本目录启动，避免历史需求互相干扰：
+初始化后，你会得到一套标准工程结构：
+
+```text
+my-casebook/
+  AGENTS.md
+  .agents/skills/casebook-test-cases/SKILL.md
+  docs/requirements/login.md
+  releases/example/login.yaml
+  schema/test-case-schema.json
+```
+
+其中 `docs/requirements/login.md` 和 `releases/example/login.yaml` 是一组配套示例，可以直接用来体验完整流程。
+
+### 2. 启动本地工作台
+
+如果使用初始化自带示例，可以运行：
 
 ```bash
 casebook serve releases/example
@@ -89,327 +128,68 @@ casebook serve releases/example
 http://127.0.0.1:8089
 ```
 
-也可以自动打开浏览器：
+### 3. 评审和轻量编辑用例
 
-```bash
-casebook serve releases/example --open
-```
+![Casebook 查看测试用例](./images/test-case.png)
 
-指定端口：
+在本地工作台中，你可以：
 
-```bash
-casebook serve releases/example --port 8090
-```
+- 按文件浏览 YAML 用例。
+- 按优先级、Mark 状态和关键词筛选用例。
+- 展开用例查看前置条件、步骤和预期结果。
+- 使用 Mark 标记需要关注或后续调整的用例。
+- 对已有用例做轻量编辑，并保存回 YAML 文件。
 
-## 初始化项目
+> 如果评审后需要新增、删除、拆分或重构用例，推荐继续交给 AI Agent 修改 YAML，而不是在页面中逐条维护。
 
-`casebook init <project>` 会创建一个完整的用例项目脚手架：
+### 4. 创建测试计划并执行用例
 
-```text
-my-casebook/
-  AGENTS.md
-  .agents/
-    skills/
-      casebook-test-cases/
-        SKILL.md
-  .vscode/
-    settings.json
-  docs/
-    requirements/
-      login.md
-  releases/
-    example/
-      login.yaml
-  schema/
-    test-case-schema.json
-```
+![Casebook 测试计划](./images/test-plan.png)
 
-这些文件分别负责：
+测试计划默认折叠，不影响用例评审。进入执行阶段后，可以展开顶部测试计划面板：
 
-- `docs/requirements/login.md`：示例需求文档。
-- `releases/example/login.yaml`：由示例需求反向配套的 YAML 测试用例。
-- `schema/test-case-schema.json`：测试用例结构约束。
-- `.agents/skills/casebook-test-cases/SKILL.md`：AI 生成用例时需要遵循的技能包。
-- `AGENTS.md`：项目根目录 AI 入口，提示 AI 读取技能包和 schema。
-- `.vscode/settings.json`：让 VS Code YAML 插件自动关联 schema。
+- 创建或选择测试计划。
+- 为每条用例选择 `Passed`、`Failed` 或 `Blocked`。
+- 记录执行备注。
+- 查看执行进度条和统计数据。
+- 点击 `Complete plan` 完成测试计划，并写入测试环境和测试人员。
 
-如果目标目录中已经存在同名文件，`init` 默认跳过，不会覆盖：
-
-```bash
-casebook init my-casebook
-```
-
-需要重置脚手架文件时，可以使用：
-
-```bash
-casebook init my-casebook --force
-```
-
-## AI 用例生成工作流
-
-推荐工作方式：
-
-1. 将产品需求、接口说明、交互规则或业务背景放入 `docs/requirements/`。
-2. 让 AI 阅读 `AGENTS.md` 和 `.agents/skills/casebook-test-cases/SKILL.md`。
-3. AI 根据需求、技能包和 `schema/test-case-schema.json` 生成 YAML 用例。
-4. 将真实项目用例写入 `releases/<版本或模块>/<功能>.yaml`。
-5. 使用 `casebook serve releases/<需求目录>` 查看、标记、编辑和执行当前需求范围内的用例。
-
-示例目录中的 `releases/example/` 只用于脚手架演示。真实项目用例建议放在更明确的目录中，例如：
-
-```text
-releases/v1-auth/login.yaml
-releases/v5-user-backend/package-management.yaml
-```
-
-使用时建议直接启动当前需求或版本目录：
-
-```bash
-casebook serve releases/v1-auth
-casebook serve releases/v5-user-backend
-```
-
-## 用例格式
-
-Casebook 读取符合以下结构的 YAML 文件：
-
-```yaml
-metadata:
-  module: "系统认证"
-  feature: "用户登录"
-  owner: "qa"
-  last_reviewed: "2026-06-24"
-  tags: [auth, login]
-
-test_cases:
-  - id: "TC_LOGIN_001"
-    title: "有效用户名和密码登录成功"
-    description: "验证用户使用正确的登录凭证可以成功进入系统。"
-    priority: "P0"
-    type: "functional"
-    preconditions:
-      - 用户已注册并处于正常可登录状态
-    steps:
-      - 输入有效用户名和对应密码
-      - 点击登录按钮
-    expected_results:
-      - 登录成功，进入系统首页
-      - 显示当前用户姓名和欢迎信息
-    tags: [smoke, login]
-    auto: true
-```
-
-字段约束以 `schema/test-case-schema.json` 为准。默认支持的优先级：
-
-```text
-P0, P1, P2
-```
-
-默认支持的类型：
-
-```text
-functional, ui, security, performance, accessibility, business, other, data-consistency
-```
-
-## 本地工作台
-
-启动后，Casebook 提供一个本地 Web UI：
-
-![](./images/casebook-serve.png)
-
-- 左侧按目录展示 YAML 用例文件。
-- 中间展示当前文件的用例列表、统计、优先级和标签。
-- 用例行可以展开，直接查看前置条件、步骤和预期结果。
-- 可以用 Mark 标记需要关注或后续修改的用例。
-- 测试计划作为全局功能显示在工作区顶部，默认折叠，不影响用例评审。
-- 选择或创建测试计划后，可以逐条记录 Pass、Fail、Block。
-- 可以完成测试计划，并填写测试环境和测试人员。
-- 测试计划面板实时显示当前启动目录的用例总数、进度条、通过数、失败数、阻塞数和未执行数。
-- 展开用例后可以记录执行备注。
-- 点击 Edit 打开右侧编辑抽屉，并保存回 YAML 文件。
-
-Casebook 会根据文件修改时间做编辑冲突检查。如果 YAML 文件在页面加载后被外部修改，保存时会提示冲突，避免覆盖他人的改动。
-
-## 测试计划与用例执行
-
-Casebook 将执行数据保存在独立文件中，不写入 YAML 用例定义。
+执行数据会保存到：
 
 ```text
 test-runs/<run-id>.json
 ```
 
-测试计划不是必选项。用例评审时可以完全不启用测试计划；需要进入执行阶段时，再展开顶部测试计划面板并创建或选择计划。
+这些数据不会写入 YAML 用例文件，而是作为后续生成测试报告的依据。
 
-测试计划绑定当前 `casebook serve <目录>` 的启动目录。比如：
+### 5. 生成 HTML 测试报告
 
-```bash
-casebook serve releases/v1-auth
-```
-
-此时创建的测试计划只属于 `releases/v1-auth`，不会混入其他需求目录的计划。
-
-每个测试计划会记录名称、范围、开始时间、完成时间和每条用例的执行结果。执行过程中，最近一次执行或备注更新时间会写入 `completed_at`；完成计划时，测试环境默认是 `测试环境`，测试人员默认来自当前启动范围内 YAML 文件的 `owner`，多个 owner 使用逗号分隔。
-
-用例结果以 `文件路径#用例ID` 作为 key：
-
-```json
-{
-  "run": {
-    "id": "run-20260625093000-login-smoke",
-    "name": "登录冒烟测试",
-    "status": "completed",
-    "scope": ["releases/v1-auth"],
-    "environment": "测试环境",
-    "tester": "qa",
-    "started_at": "2026-06-25T01:30:00+00:00",
-    "completed_at": "2026-06-25T02:30:00+00:00"
-  },
-  "results": {
-    "releases/v1-auth/login.yaml#TC_LOGIN_001": {
-      "status": "passed",
-      "notes": "验证通过",
-      "executed_at": "2026-06-25T01:35:00+00:00"
-    }
-  }
-}
-```
-
-支持的执行状态：
-
-```text
-passed, failed, blocked
-```
-
-未出现在 `results` 中的用例视为未执行。
-
-## HTML 测试报告
-
-执行完成后，可以从测试计划 JSON 生成 HTML 报告：
-
-```bash
-casebook report test-runs/run-20260625093000-login-smoke.json
-```
-
-默认会在同目录生成同名 `.html` 文件：
-
-```text
-test-runs/run-20260625093000-login-smoke.html
-```
-
-也可以指定输出位置：
+执行完成后，使用测试计划 JSON 生成报告：
 
 ```bash
 casebook report test-runs/run-20260625093000-login-smoke.json --output reports/login-smoke.html
 ```
 
-报告内容包括：
+将命令中的 run 文件名替换成你本地 `test-runs/` 目录下实际生成的文件。
 
-- 测试计划基本信息：ID、名称、状态、范围、测试环境、测试人员、开始时间和完成时间。
-- 执行概览：用例总数、已执行、已通过、失败、阻塞、待测试。
-- ECharts 环形图：执行状态分布、失败/阻塞优先级分布。
+![Casebook HTML 测试报告](./images/test-report.png)
+
+报告包含：
+
+- 测试计划基本信息。
+- 执行概览和通过率统计。
+- ECharts 图表。
 - 失败用例列表。
 - 阻塞用例列表。
 
-报告 HTML 通过 CDN 引入 ECharts 渲染图表；即使图表脚本未加载，报告中的概览数字和用例列表仍然可以直接查看。
+到这里，一个从需求、AI 生成用例、本地评审、用例执行到 HTML 测试报告的 Casebook 闭环就完成了。
 
-## 命令参考
 
-创建项目：
+## 更多使用说明
 
-```bash
-casebook init my-casebook
-```
+README 只保留产品理念和快速旅程，完整教程放在独立文档中，避免首次阅读过长：
 
-覆盖脚手架文件：
-
-```bash
-casebook init my-casebook --force
-```
-
-启动当前需求目录：
-
-```bash
-casebook serve releases/v1-auth
-```
-
-同时扫描多个目录：
-
-```bash
-casebook serve releases/v1 releases/v2
-```
-
-指定主机和端口：
-
-```bash
-casebook serve releases/v1-auth --host 127.0.0.1 --port 8090
-```
-
-禁用文件监听：
-
-```bash
-casebook serve releases/v1-auth --no-watch
-```
-
-生成 HTML 测试报告：
-
-```bash
-casebook report test-runs/run-20260625093000-login-smoke.json
-```
-
-指定报告输出路径：
-
-```bash
-casebook report test-runs/run-20260625093000-login-smoke.json --output reports/login-smoke.html
-```
-
-## 项目状态文件
-
-Casebook 的标记数据保存在项目根目录：
-
-```text
-.casebook/marks.json
-```
-
-示例：
-
-```json
-{
-  "releases/example/login.yaml#TC_LOGIN_001": {
-    "needs_update": true,
-    "updated_at": "2026-06-24T02:00:00+00:00"
-  }
-}
-```
-
-这些状态不写入 YAML 用例文件，因此不会影响用例正文和 schema 校验。
-
-执行数据保存在：
-
-```text
-test-runs/*.json
-```
-
-这些文件是后续生成测试报告的重要数据来源。测试计划按启动目录隔离，适合围绕单个需求、版本或模块做执行统计。
-
-## 开发
-
-本地开发安装：
-
-```bash
-pip install -e .
-```
-
-创建演示项目：
-
-```bash
-casebook init /tmp/casebook-demo
-cd /tmp/casebook-demo
-casebook serve releases/example
-```
-
-在源码模式下也可以直接运行：
-
-```bash
-python -m casebook.cli init /tmp/casebook-demo
-python -m casebook.cli serve releases/example
-```
+- [使用 AI Agent 生成用例](./docs/casebook-instructions.md#使用-ai-agent-生成用例)
+- [测试计划与用例执行](./docs/casebook-instructions.md#测试计划与用例执行)
+- [项目状态文件](./docs/casebook-instructions.md#项目状态文件)
+- [HTML 测试报告](./docs/casebook-instructions.md#html-测试报告)
