@@ -564,7 +564,7 @@ body.resizing-sidebar .app-shell {
 
 .execution-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(96px, 1fr));
+  grid-template-columns: repeat(5, minmax(96px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
@@ -646,6 +646,12 @@ body.resizing-sidebar .app-shell {
   text-overflow: ellipsis;
   white-space: nowrap;
   word-break: normal;
+}
+
+.status-total {
+  --status: var(--primary);
+  --status-soft: var(--primary-soft);
+  --status-line: var(--primary-border);
 }
 
 .status-passed {
