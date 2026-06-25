@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Casebook</title>
-  <link rel="icon" href="data:,">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 
@@ -64,7 +64,10 @@
             <div class="execution-controls">
               <select id="runSelect" aria-label="Select test plan"></select>
               <input id="runNameInput" type="text" placeholder="New test plan name">
-              <button class="outline-button" id="createRunButton" type="button">Create plan</button>
+              <button class="primary-button" id="createRunButton" type="button">Create plan</button>
+              <input id="runEnvironmentInput" type="text" placeholder="Environment">
+              <input id="runTesterInput" type="text" placeholder="Tester">
+              <button class="primary-button success-button" id="completeRunButton" type="button">Complete plan</button>
             </div>
           </div>
           <div class="execution-progress">
