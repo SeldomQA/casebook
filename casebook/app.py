@@ -11,6 +11,7 @@ from flask import Flask, Response, jsonify, render_template, request, stream_wit
 from . import __version__
 from .editor import CaseEditor, CaseNotFoundError, EditConflictError
 from .marks import MarksStore
+from .runs import InvalidRunError, RunNotFoundError, TestRunStore
 from .scanner import CasebookStore
 from .watcher import CasebookWatcher
 
@@ -44,6 +45,7 @@ def create_app(
     store = CasebookStore(project_root=project_root, scan_dirs=scan_dirs)
     editor = CaseEditor(project_root=project_root)
     marks = MarksStore(project_root=project_root)
+    runs = TestRunStore(project_root=project_root)
     broker = EventBroker()
 
     initial_summary = store.refresh()
@@ -122,6 +124,65 @@ def create_app(
             "file_path": file_path,
             "case_id": case_id,
             "marked": result["marked"],
+        })
+        return jsonify(result)
+
+    @app.get("/api/test-runs")
+    def api_test_runs():
+        return jsonify(runs.list_runs(scope=store.scan_dirs))
+
+    @app.post("/api/test-runs")
+    def api_create_test_run():
+        payload = request.get_json(silent=True) or {}
+        result = runs.create_run(
+            name=payload.get("name"),
+            scope=store.scan_dirs,
+            environment=payload.get("environment"),
+            build=payload.get("build"),
+            tester=payload.get("tester"),
+        )
+        broker.publish({
+            "type": "test_run",
+            "action": "created",
+            "run_id": result["run"]["id"],
+        })
+        return jsonify(result), 201
+
+    @app.get("/api/test-runs/<run_id>")
+    def api_test_run(run_id: str):
+        try:
+            return jsonify(runs.get_run(run_id, scope=store.scan_dirs))
+        except RunNotFoundError:
+            return jsonify({"error": f"Test run not found: {run_id}"}), 404
+
+    @app.patch("/api/test-runs/<run_id>/results")
+    def api_update_test_result(run_id: str):
+        payload = request.get_json(silent=True) or {}
+        file_path = str(payload.get("file_path") or payload.get("filePath") or "")
+        case_id = str(payload.get("case_id") or payload.get("caseId") or "")
+        if not file_path or not case_id:
+            return jsonify({"error": "Missing file_path or case_id"}), 400
+        try:
+            result = runs.update_result(
+                run_id=run_id,
+                file_path=file_path,
+                case_id=case_id,
+                status=payload.get("status"),
+                notes=payload.get("notes") if "notes" in payload else None,
+                defects=payload.get("defects") if "defects" in payload else None,
+                tester=payload.get("tester") if "tester" in payload else None,
+                scope=store.scan_dirs,
+            )
+        except RunNotFoundError:
+            return jsonify({"error": f"Test run not found: {run_id}"}), 404
+        except InvalidRunError as exc:
+            return jsonify({"error": str(exc)}), 400
+        broker.publish({
+            "type": "test_run",
+            "action": "result_updated",
+            "run_id": run_id,
+            "file_path": file_path,
+            "case_id": case_id,
         })
         return jsonify(result)
 

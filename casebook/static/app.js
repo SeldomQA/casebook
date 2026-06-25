@@ -6,6 +6,10 @@ const state = {
   summary: null,
   tree: [],
   marks: {},
+  runs: [],
+  currentRunId: null,
+  currentRun: null,
+  testPlanExpanded: false,
   currentFile: null,
   currentData: null,
   selectedCaseId: null,
@@ -37,8 +41,19 @@ function bindElements() {
     "reloadNowButton",
     "emptyState",
     "fileView",
+    "executionPanel",
+    "executionToggle",
+    "executionPanelBody",
+    "executionRunTitle",
+    "executionScopeText",
+    "executionScopeTitle",
+    "runSelect",
+    "runNameInput",
+    "createRunButton",
+    "executionProgressBar",
+    "executionProgressText",
+    "executionStats",
     "fileMeta",
-    "metrics",
     "caseSearch",
     "priorityFilters",
     "caseRows",
@@ -72,6 +87,9 @@ function bindEvents() {
   window.addEventListener("resize", syncSidebarWidthToViewport);
   els.refreshButton.addEventListener("click", refreshAll);
   els.reloadNowButton.addEventListener("click", () => reloadAfterExternalChange(true));
+  els.executionToggle.addEventListener("click", toggleTestPlanPanel);
+  els.runSelect.addEventListener("change", () => selectRun(els.runSelect.value));
+  els.createRunButton.addEventListener("click", createRun);
   els.caseSearch.addEventListener("input", () => {
     state.query = els.caseSearch.value.trim().toLowerCase();
     renderCaseRows();
@@ -83,7 +101,24 @@ function bindEvents() {
     renderFilters();
     renderCaseRows();
   });
+  els.caseRows.addEventListener("change", (event) => {
+    const executionSelect = event.target.closest("select[data-exec-select]");
+    if (!executionSelect) return;
+    event.stopPropagation();
+    updateExecutionStatus(executionSelect.dataset.caseId, executionSelect.value);
+  });
   els.caseRows.addEventListener("click", (event) => {
+    const executionSelect = event.target.closest("select[data-exec-select]");
+    if (executionSelect) {
+      event.stopPropagation();
+      return;
+    }
+    const saveExecutionButton = event.target.closest("button[data-save-execution]");
+    if (saveExecutionButton) {
+      event.stopPropagation();
+      saveExecutionDetails(saveExecutionButton.dataset.caseId);
+      return;
+    }
     const markButton = event.target.closest("button[data-mark]");
     if (markButton) {
       event.stopPropagation();
@@ -201,20 +236,32 @@ async function boot() {
 }
 
 async function refreshAll() {
-  const [summary, tree, marks] = await Promise.all([
+  const [summary, tree, marks, runs] = await Promise.all([
     api("/api/summary"),
     api("/api/tree"),
     api("/api/marks"),
+    api("/api/test-runs"),
   ]);
   state.summary = summary;
   state.tree = tree;
   state.marks = marks;
+  state.runs = runs;
+  if (state.currentRunId && !state.runs.some((run) => run.id === state.currentRunId)) {
+    state.currentRunId = null;
+    state.currentRun = null;
+  }
+  if (state.currentRunId) {
+    state.currentRun = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`);
+  } else {
+    state.currentRun = null;
+  }
   renderShell();
+  renderExecutionPanel();
 }
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
-    headers: {"Content-Type": "application/json", ...(options.headers || {})},
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
   const data = await response.json().catch(() => ({}));
@@ -230,6 +277,20 @@ function connectEvents() {
   source.addEventListener("reload", () => reloadAfterExternalChange(false));
   source.addEventListener("marks", async () => {
     state.marks = await api("/api/marks");
+    renderFilters();
+    renderCaseRows();
+  });
+  source.addEventListener("test_run", async (event) => {
+    const data = JSON.parse(event.data || "{}");
+    state.runs = await api("/api/test-runs");
+    if (state.currentRunId && !state.runs.some((run) => run.id === state.currentRunId)) {
+      state.currentRunId = null;
+      state.currentRun = null;
+    }
+    if (state.currentRunId && data.run_id === state.currentRunId) {
+      state.currentRun = state.currentRunId ? await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`) : null;
+    }
+    renderExecutionPanel();
     renderCaseRows();
   });
 }
@@ -245,7 +306,7 @@ async function reloadAfterExternalChange(force) {
   const current = state.currentFile;
   await refreshAll();
   if (current) {
-    await loadFile(current, {keepDrawer: true, keepFilter: true, keepExpanded: true});
+    await loadFile(current, { keepDrawer: true, keepFilter: true, keepExpanded: true });
   }
 }
 
@@ -305,7 +366,7 @@ async function loadFile(filePath, options = {}) {
   const data = await api(`/api/files/${encodePath(filePath)}`);
   state.currentFile = filePath;
   state.currentData = data;
-  state.marks = {...state.marks, ...(data.marks || {})};
+  state.marks = { ...state.marks, ...(data.marks || {}) };
   state.filter = options.keepFilter ? state.filter : "all";
   state.query = options.keepFilter ? state.query : "";
   if (!options.keepExpanded) {
@@ -314,8 +375,8 @@ async function loadFile(filePath, options = {}) {
   els.caseSearch.value = state.query;
   els.emptyState.hidden = true;
   els.fileView.hidden = false;
+  renderExecutionPanel();
   renderFileMeta();
-  renderMetrics();
   renderFilters();
   renderCaseRows();
   markActiveTreeItem();
@@ -351,41 +412,118 @@ function renderMetaItem(label, value, wide = false) {
     </div>`;
 }
 
-function renderMetrics() {
-  const stats = state.currentData.stats || {};
-  const priorities = stats.priorities || {};
-  const needs = countNeedsUpdate();
-  const metrics = [
-    {label: "Cases", value: stats.total || 0, accent: "primary", icon: "all"},
-    {label: "P0", value: priorities.P0 || 0, accent: "p0", icon: "p0"},
-    {label: "P1", value: priorities.P1 || 0, accent: "p1", icon: "p1"},
-    {label: "P2", value: priorities.P2 || 0, accent: "p2", icon: "p2"},
-    {label: "Mark", value: needs, accent: "mark", icon: "mark"},
+function renderExecutionPanel() {
+  if (!els.executionPanel) return;
+  const runs = state.runs || [];
+  const scope = scopeLabel();
+  const stats = testPlanStats();
+  const percent = stats.total ? Math.round((stats.executed / stats.total) * 100) : 0;
+  const run = state.currentRun?.run;
+
+  els.executionPanel.classList.toggle("expanded", state.testPlanExpanded);
+  els.executionPanel.classList.toggle("collapsed", !state.testPlanExpanded);
+  els.executionToggle.setAttribute("aria-expanded", String(state.testPlanExpanded));
+  els.executionScopeText.textContent = `Scope: ${scope}`;
+  els.executionScopeTitle.textContent = scope;
+  els.executionRunTitle.textContent = run ? `${run.name || run.id}` : "Test plan not enabled";
+  els.executionProgressText.textContent = run
+    ? `${stats.executed} / ${stats.total} executed · ${percent}%`
+    : "Not enabled";
+
+  const options = [
+    `<option value="">No test plan</option>`,
+    ...runs.map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.name || item.id)}</option>`),
   ];
-  els.metrics.innerHTML = metrics.map((metric) => `
-    <div class="metric accent-${metric.accent}">
-      <div>
-        <strong>${metric.value}</strong>
-        <span>${escapeHtml(metric.label)}</span>
-      </div>
-      <div class="metric-icon">${escapeHtml(metric.icon)}</div>
+  els.runSelect.innerHTML = options.join("");
+  els.runSelect.value = state.currentRunId || "";
+
+  els.executionProgressBar.style.width = `${percent}%`;
+  els.executionStats.innerHTML = [
+    ["passed", "Passed", stats.passed],
+    ["failed", "Failed", stats.failed],
+    ["blocked", "Blocked", stats.blocked],
+    ["untested", "Untested", stats.untested],
+  ].map(([status, label, value]) => `
+    <div class="execution-stat status-${status}">
+      <strong>${value}</strong>
+      <span>${label}</span>
     </div>
   `).join("");
 }
 
+function testPlanStats() {
+  const total = Number(state.summary?.cases || 0);
+  const stats = {
+    total,
+    executed: 0,
+    passed: 0,
+    failed: 0,
+    blocked: 0,
+    untested: total,
+  };
+  const results = state.currentRun?.results || {};
+  Object.values(results).forEach((result) => {
+    if (!result || typeof result !== "object") return;
+    const status = String(result.status || "").toLowerCase();
+    if (status in stats && status !== "untested") {
+      stats.executed += 1;
+      stats[status] += 1;
+    }
+  });
+  stats.executed = Math.min(stats.executed, total);
+  stats.untested = Math.max(total - stats.executed, 0);
+  return stats;
+}
+
+function executionResult(caseId) {
+  if (!state.currentData || !state.currentRun) return null;
+  const key = markKey(state.currentData.path, caseId);
+  const result = state.currentRun.results?.[key];
+  return result && typeof result === "object" ? result : null;
+}
+
+function executionStatus(caseId) {
+  const status = executionResult(caseId)?.status || "untested";
+  return ["passed", "failed", "blocked"].includes(status) ? status : "untested";
+}
+
 function renderFilters() {
+  const counts = filterCounts();
   const filters = [
-    ["all", "All"],
-    ["P0", "P0"],
-    ["P1", "P1"],
-    ["P2", "P2"],
-    ["needs", "Mark"],
+    ["all", "All", counts.all],
+    ["P0", "P0", counts.P0],
+    ["P1", "P1", counts.P1],
+    ["P2", "P2", counts.P2],
+    ["needs", "Mark", counts.needs],
   ];
-  els.priorityFilters.innerHTML = filters.map(([value, label]) => {
+  els.priorityFilters.innerHTML = filters.map(([value, label, count]) => {
     const active = state.filter === value ? " active" : "";
     const mark = value === "needs" ? " mark" : "";
-    return `<button class="filter-button${active}${mark}" type="button" data-filter="${value}">${label}</button>`;
+    const priority = ["P0", "P1", "P2"].includes(value) ? ` priority-filter priority-${value.toLowerCase()}` : "";
+    return `
+      <button class="filter-button${active}${mark}${priority}" type="button" data-filter="${value}">
+        <span class="filter-label">${escapeHtml(label)}</span>
+        <span class="filter-count">${escapeHtml(count)}</span>
+      </button>`;
   }).join("");
+}
+
+function filterCounts() {
+  const cases = state.currentData?.cases || [];
+  const counts = {
+    all: cases.length,
+    P0: 0,
+    P1: 0,
+    P2: 0,
+    needs: countNeedsUpdate(),
+  };
+  cases.forEach((caseItem) => {
+    const priority = String(caseItem.priority || "").toUpperCase();
+    if (priority in counts) {
+      counts[priority] += 1;
+    }
+  });
+  return counts;
 }
 
 function renderCaseRows() {
@@ -397,12 +535,13 @@ function renderCaseRows() {
       const marked = Boolean(state.marks[key] && state.marks[key].needs_update);
       const selected = state.selectedCaseId === caseItem.id;
       const expanded = state.expandedCaseIds.has(caseItem.id);
+      const execStatus = executionStatus(caseItem.id);
       const tags = (caseItem.tags || []).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
       const description = caseItem.description
         ? `<p class="case-description">${escapeHtml(caseItem.description)}</p>`
         : "";
       return `
-        <article class="case-item${marked ? " needs-update" : ""}${selected ? " selected" : ""}${expanded ? " expanded" : ""}" data-case-id="${escapeAttr(caseItem.id)}">
+        <article class="case-item${marked ? " needs-update" : ""}${selected ? " selected" : ""}${expanded ? " expanded" : ""} exec-${escapeAttr(execStatus)}" data-case-id="${escapeAttr(caseItem.id)}">
           <div class="case-summary" data-case-summary data-case-id="${escapeAttr(caseItem.id)}">
             <div class="case-toggle-cell">
               <button class="chevron-button" type="button" data-toggle-case="1" data-case-id="${escapeAttr(caseItem.id)}" aria-expanded="${expanded}" aria-label="${expanded ? "Collapse case details" : "Expand case details"}"></button>
@@ -423,6 +562,7 @@ function renderCaseRows() {
             <div class="case-type-cell">${escapeHtml(caseItem.type)}</div>
             <div class="case-tags-cell"><div class="tag-list">${tags}</div></div>
             <div class="case-actions">
+              ${state.currentRun ? renderExecutionActions(caseItem.id, execStatus) : ""}
               <button class="mark-action${marked ? " active" : ""}" type="button" data-mark="1" data-case-id="${escapeAttr(caseItem.id)}">${marked ? "Marked" : "Mark"}</button>
               <button class="text-action" type="button" data-edit-case="1" data-case-id="${escapeAttr(caseItem.id)}">Edit</button>
             </div>
@@ -432,7 +572,6 @@ function renderCaseRows() {
     });
   els.caseRows.innerHTML = rows.join("");
   els.noResults.hidden = rows.length > 0;
-  renderMetrics();
 }
 
 function renderCaseDetails(caseItem) {
@@ -445,9 +584,48 @@ function renderCaseDetails(caseItem) {
         </div>
         <div class="case-detail-column">
           ${renderDetailList("Expected Results", caseItem.expected_results, false)}
+          ${state.currentRun ? renderExecutionDetails(caseItem) : ""}
         </div>
       </div>
     </div>`;
+}
+
+function renderExecutionActions(caseId, currentStatus) {
+  const statuses = [
+    ["passed", "Pass"],
+    ["failed", "Fail"],
+    ["blocked", "Block"],
+  ];
+  const disabled = state.currentRun ? "" : " disabled";
+  return `
+    <div class="execution-actions" aria-label="Execution status">
+      <select class="execution-select status-${escapeAttr(currentStatus)}" data-exec-select="1" data-case-id="${escapeAttr(caseId)}" aria-label="Execution status"${disabled}>
+        <option value="untested"${currentStatus === "untested" ? " selected" : ""} disabled>Untested</option>
+        ${statuses.map(([status, label]) => `
+          <option value="${status}"${currentStatus === status ? " selected" : ""}>${label}</option>
+        `).join("")}
+      </select>
+    </div>`;
+}
+
+function renderExecutionDetails(caseItem) {
+  const result = executionResult(caseItem.id) || {};
+  const defects = (result.defects || []).join("\n");
+  return `
+    <section class="detail-section execution-detail-section">
+      <h5>${detailIcon("Execution")}<span>Execution</span></h5>
+      <div class="execution-detail-grid">
+        <label>
+          <span>Notes</span>
+          <textarea data-exec-notes="${escapeAttr(caseItem.id)}" rows="3" placeholder="Execution notes">${escapeHtml(result.notes || "")}</textarea>
+        </label>
+        <label>
+          <span>Defects</span>
+          <textarea data-exec-defects="${escapeAttr(caseItem.id)}" rows="2" placeholder="One defect link or ID per line">${escapeHtml(defects)}</textarea>
+        </label>
+        <button class="outline-button execution-save-button" type="button" data-save-execution="1" data-case-id="${escapeAttr(caseItem.id)}"${state.currentRun ? "" : " disabled"}>Save execution</button>
+      </div>
+    </section>`;
 }
 
 function renderDetailList(title, items, ordered) {
@@ -552,7 +730,7 @@ async function saveCase() {
     });
     showToast("Saved to YAML");
     await refreshAll();
-    await loadFile(state.currentData.path, {keepDrawer: true, keepFilter: true, keepExpanded: true});
+    await loadFile(state.currentData.path, { keepDrawer: true, keepFilter: true, keepExpanded: true });
     if (response.result && response.result.case) {
       state.selectedCaseId = response.result.case.id;
     }
@@ -566,10 +744,99 @@ async function toggleNeedsUpdate(caseId) {
   if (!state.currentData || !caseId) return;
   const result = await api("/api/marks/toggle", {
     method: "POST",
-    body: JSON.stringify({file_path: state.currentData.path, case_id: caseId}),
+    body: JSON.stringify({ file_path: state.currentData.path, case_id: caseId }),
   });
   state.marks = result.marks || state.marks;
+  renderFilters();
   renderCaseRows();
+}
+
+async function selectRun(runId) {
+  state.currentRunId = runId || null;
+  state.currentRun = state.currentRunId ? await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`) : null;
+  if (state.currentRunId) state.testPlanExpanded = true;
+  renderExecutionPanel();
+  renderCaseRows();
+}
+
+async function createRun() {
+  const name = els.runNameInput.value.trim() || defaultRunName();
+  const response = await api("/api/test-runs", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      scope: state.summary?.scan_dirs || [],
+    }),
+  });
+  state.currentRun = response;
+  state.currentRunId = response.run.id;
+  state.testPlanExpanded = true;
+  els.runNameInput.value = "";
+  state.runs = await api("/api/test-runs");
+  renderExecutionPanel();
+  renderCaseRows();
+  showToast("Test plan created");
+}
+
+async function updateExecutionStatus(caseId, status) {
+  if (!state.currentData || !caseId) return;
+  if (status === "untested") return;
+  if (!state.currentRunId) {
+    showToast("Select or create a test plan first");
+    return;
+  }
+  const payload = {
+    file_path: state.currentData.path,
+    case_id: caseId,
+    status,
+  };
+  const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}/results`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  state.currentRun = response.run;
+  state.runs = await api("/api/test-runs");
+  renderExecutionPanel();
+  renderCaseRows();
+}
+
+async function saveExecutionDetails(caseId) {
+  if (!state.currentData || !caseId) return;
+  if (!state.currentRunId) {
+    showToast("Select or create a test plan first");
+    return;
+  }
+  const notes = document.querySelector(`[data-exec-notes="${cssEscape(caseId)}"]`)?.value || "";
+  const defects = arrayFromText(document.querySelector(`[data-exec-defects="${cssEscape(caseId)}"]`)?.value || "");
+  const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}/results`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      file_path: state.currentData.path,
+      case_id: caseId,
+      notes,
+      defects,
+    }),
+  });
+  state.currentRun = response.run;
+  state.runs = await api("/api/test-runs");
+  renderExecutionPanel();
+  renderCaseRows();
+  showToast("Execution details saved");
+}
+
+function defaultRunName() {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  return `${scopeLabel()} ${date}`;
+}
+
+function toggleTestPlanPanel() {
+  state.testPlanExpanded = !state.testPlanExpanded;
+  renderExecutionPanel();
+}
+
+function scopeLabel() {
+  return (state.summary?.scan_dirs || []).join(", ") || "No scope";
 }
 
 function findCase(caseId) {
@@ -631,6 +898,13 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value);
+}
+
+function cssEscape(value) {
+  if (window.CSS && typeof window.CSS.escape === "function") {
+    return window.CSS.escape(String(value));
+  }
+  return String(value).replace(/["\\]/g, "\\$&");
 }
 
 function showToast(message) {
