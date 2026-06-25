@@ -31,6 +31,7 @@ Casebook 将用例工程化：
 - 使用 `schema/test-case-schema.json` 约束 YAML 用例格式。
 - 在本地 Web UI 中浏览、筛选、展开、标记和编辑 YAML 用例。
 - 按启动目录创建测试计划，记录用例通过、失败、阻塞和执行备注。
+- 使用 `casebook report` 从测试计划 JSON 生成 HTML 测试报告。
 - 保存编辑时直接回写原始 YAML 文件。
 - 使用 `ruamel.yaml` 尽量保留 YAML 注释、字段顺序、缩进和 inline list 风格。
 - 将标记状态保存在 `.casebook/marks.json`，不污染用例文件本身。
@@ -62,6 +63,7 @@ casebook --help
 ╭─ Commands ──────────────────────────────────────────────────────────────────────────────────╮
 │ serve  Start the local Casebook web UI.                                                     │
 │ init   Create a new Casebook test case project.                                             │
+│ report Generate an HTML test report from a test run JSON file.                              │
 ╰─────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -221,6 +223,7 @@ functional, ui, security, performance, accessibility, business, other, data-cons
 - 可以用 Mark 标记需要关注或后续修改的用例。
 - 测试计划作为全局功能显示在工作区顶部，默认折叠，不影响用例评审。
 - 选择或创建测试计划后，可以逐条记录 Pass、Fail、Block。
+- 可以完成测试计划，并填写测试环境和测试人员。
 - 测试计划面板实时显示当前启动目录的用例总数、进度条、通过数、失败数、阻塞数和未执行数。
 - 展开用例后可以记录执行备注。
 - 点击 Edit 打开右侧编辑抽屉，并保存回 YAML 文件。
@@ -245,16 +248,21 @@ casebook serve releases/v1-auth
 
 此时创建的测试计划只属于 `releases/v1-auth`，不会混入其他需求目录的计划。
 
-每个测试计划会记录名称、范围、开始时间和每条用例的执行结果。用例结果以 `文件路径#用例ID` 作为 key：
+每个测试计划会记录名称、范围、开始时间、完成时间和每条用例的执行结果。执行过程中，最近一次执行或备注更新时间会写入 `completed_at`；完成计划时，测试环境默认是 `测试环境`，测试人员默认来自当前启动范围内 YAML 文件的 `owner`，多个 owner 使用逗号分隔。
+
+用例结果以 `文件路径#用例ID` 作为 key：
 
 ```json
 {
   "run": {
     "id": "run-20260625093000-login-smoke",
     "name": "登录冒烟测试",
-    "status": "in_progress",
+    "status": "completed",
     "scope": ["releases/v1-auth"],
-    "started_at": "2026-06-25T01:30:00+00:00"
+    "environment": "测试环境",
+    "tester": "qa",
+    "started_at": "2026-06-25T01:30:00+00:00",
+    "completed_at": "2026-06-25T02:30:00+00:00"
   },
   "results": {
     "releases/v1-auth/login.yaml#TC_LOGIN_001": {
@@ -273,6 +281,36 @@ passed, failed, blocked
 ```
 
 未出现在 `results` 中的用例视为未执行。
+
+## HTML 测试报告
+
+执行完成后，可以从测试计划 JSON 生成 HTML 报告：
+
+```bash
+casebook report test-runs/run-20260625093000-login-smoke.json
+```
+
+默认会在同目录生成同名 `.html` 文件：
+
+```text
+test-runs/run-20260625093000-login-smoke.html
+```
+
+也可以指定输出位置：
+
+```bash
+casebook report test-runs/run-20260625093000-login-smoke.json --output reports/login-smoke.html
+```
+
+报告内容包括：
+
+- 测试计划基本信息：ID、名称、状态、范围、测试环境、测试人员、开始时间和完成时间。
+- 执行概览：用例总数、已执行、已通过、失败、阻塞、待测试。
+- ECharts 环形图：执行状态分布、失败/阻塞优先级分布。
+- 失败用例列表。
+- 阻塞用例列表。
+
+报告 HTML 通过 CDN 引入 ECharts 渲染图表；即使图表脚本未加载，报告中的概览数字和用例列表仍然可以直接查看。
 
 ## 命令参考
 
@@ -310,6 +348,18 @@ casebook serve releases/v1-auth --host 127.0.0.1 --port 8090
 
 ```bash
 casebook serve releases/v1-auth --no-watch
+```
+
+生成 HTML 测试报告：
+
+```bash
+casebook report test-runs/run-20260625093000-login-smoke.json
+```
+
+指定报告输出路径：
+
+```bash
+casebook report test-runs/run-20260625093000-login-smoke.json --output reports/login-smoke.html
 ```
 
 ## 项目状态文件
