@@ -24,6 +24,7 @@ packages = ["casebook"]
 [tool.setuptools.package-data]
 casebook = [
   "templates/*.html",
+  "static/*.svg",
   "static/*.css",
   "static/*.js",
   "project_template/AGENTS.md",
