@@ -8,12 +8,29 @@ Casebook 是一个面向 AI 时代测试用例工作的本地工具。
 
 Casebook 的目标不是替代测试人员，而是把测试人员从重复录入中释放出来：人负责需求理解、风险判断和评审，AI 负责按规范批量生成结构化用例，Casebook 负责可视化查看和编辑。
 
+
+## 设计理念
+
+传统测试用例往往散落在表格、文档和测试管理平台里，格式难统一，版本难追踪，AI 也很难稳定复用。
+
+Casebook 将用例工程化：
+
+- 用 `docs/requirements/` 承载需求输入。
+- 用 `.agents/skills/` 固化测试设计方法。
+- 用 `schema/` 固化结构约束。
+- 用 `releases/` 存放可版本化的 YAML 用例。
+- 用本地 Web UI 完成审阅、标记、编辑和执行。
+
+这让测试用例变成可以被 AI 生成、被 schema 校验、被 Git 管理、被人高效评审和执行的工程资产。
+
+
 ## 核心能力
 
 - 一条命令创建标准 Casebook 用例项目。
 - 将需求文档放入 `docs/requirements/`，让 AI 按项目技能包生成测试用例。
 - 使用 `schema/test-case-schema.json` 约束 YAML 用例格式。
 - 在本地 Web UI 中浏览、筛选、展开、标记和编辑 YAML 用例。
+- 按启动目录创建测试计划，记录用例通过、失败、阻塞和执行备注。
 - 保存编辑时直接回写原始 YAML 文件。
 - 使用 `ruamel.yaml` 尽量保留 YAML 注释、字段顺序、缩进和 inline list 风格。
 - 将标记状态保存在 `.casebook/marks.json`，不污染用例文件本身。
@@ -58,10 +75,10 @@ casebook init my-casebook
 cd my-casebook
 ```
 
-启动本地用例工作台：
+启动本地用例工作台。推荐按需求目录或版本目录启动，避免历史需求互相干扰：
 
 ```bash
-casebook serve releases
+casebook serve releases/example
 ```
 
 默认地址：
@@ -73,13 +90,13 @@ http://127.0.0.1:8089
 也可以自动打开浏览器：
 
 ```bash
-casebook serve releases --open
+casebook serve releases/example --open
 ```
 
 指定端口：
 
 ```bash
-casebook serve releases --port 8090
+casebook serve releases/example --port 8090
 ```
 
 ## 初始化项目
@@ -134,13 +151,20 @@ casebook init my-casebook --force
 2. 让 AI 阅读 `AGENTS.md` 和 `.agents/skills/casebook-test-cases/SKILL.md`。
 3. AI 根据需求、技能包和 `schema/test-case-schema.json` 生成 YAML 用例。
 4. 将真实项目用例写入 `releases/<版本或模块>/<功能>.yaml`。
-5. 使用 `casebook serve releases` 查看、标记和编辑用例。
+5. 使用 `casebook serve releases/<需求目录>` 查看、标记、编辑和执行当前需求范围内的用例。
 
 示例目录中的 `releases/example/` 只用于脚手架演示。真实项目用例建议放在更明确的目录中，例如：
 
 ```text
 releases/v1-auth/login.yaml
 releases/v5-user-backend/package-management.yaml
+```
+
+使用时建议直接启动当前需求或版本目录：
+
+```bash
+casebook serve releases/v1-auth
+casebook serve releases/v5-user-backend
 ```
 
 ## 用例格式
@@ -195,9 +219,60 @@ functional, ui, security, performance, accessibility, business, other, data-cons
 - 中间展示当前文件的用例列表、统计、优先级和标签。
 - 用例行可以展开，直接查看前置条件、步骤和预期结果。
 - 可以用 Mark 标记需要关注或后续修改的用例。
+- 测试计划作为全局功能显示在工作区顶部，默认折叠，不影响用例评审。
+- 选择或创建测试计划后，可以逐条记录 Pass、Fail、Block。
+- 测试计划面板实时显示当前启动目录的用例总数、进度条、通过数、失败数、阻塞数和未执行数。
+- 展开用例后可以记录执行备注。
 - 点击 Edit 打开右侧编辑抽屉，并保存回 YAML 文件。
 
 Casebook 会根据文件修改时间做编辑冲突检查。如果 YAML 文件在页面加载后被外部修改，保存时会提示冲突，避免覆盖他人的改动。
+
+## 测试计划与用例执行
+
+Casebook 将执行数据保存在独立文件中，不写入 YAML 用例定义。
+
+```text
+test-runs/<run-id>.json
+```
+
+测试计划不是必选项。用例评审时可以完全不启用测试计划；需要进入执行阶段时，再展开顶部测试计划面板并创建或选择计划。
+
+测试计划绑定当前 `casebook serve <目录>` 的启动目录。比如：
+
+```bash
+casebook serve releases/v1-auth
+```
+
+此时创建的测试计划只属于 `releases/v1-auth`，不会混入其他需求目录的计划。
+
+每个测试计划会记录名称、范围、开始时间和每条用例的执行结果。用例结果以 `文件路径#用例ID` 作为 key：
+
+```json
+{
+  "run": {
+    "id": "run-20260625093000-login-smoke",
+    "name": "登录冒烟测试",
+    "status": "in_progress",
+    "scope": ["releases/v1-auth"],
+    "started_at": "2026-06-25T01:30:00+00:00"
+  },
+  "results": {
+    "releases/v1-auth/login.yaml#TC_LOGIN_001": {
+      "status": "passed",
+      "notes": "验证通过",
+      "executed_at": "2026-06-25T01:35:00+00:00"
+    }
+  }
+}
+```
+
+支持的执行状态：
+
+```text
+passed, failed, blocked
+```
+
+未出现在 `results` 中的用例视为未执行。
 
 ## 命令参考
 
@@ -213,10 +288,10 @@ casebook init my-casebook
 casebook init my-casebook --force
 ```
 
-启动默认用例目录：
+启动当前需求目录：
 
 ```bash
-casebook serve releases
+casebook serve releases/v1-auth
 ```
 
 同时扫描多个目录：
@@ -228,13 +303,13 @@ casebook serve releases/v1 releases/v2
 指定主机和端口：
 
 ```bash
-casebook serve releases --host 127.0.0.1 --port 8090
+casebook serve releases/v1-auth --host 127.0.0.1 --port 8090
 ```
 
 禁用文件监听：
 
 ```bash
-casebook serve releases --no-watch
+casebook serve releases/v1-auth --no-watch
 ```
 
 ## 项目状态文件
@@ -258,6 +333,14 @@ Casebook 的标记数据保存在项目根目录：
 
 这些状态不写入 YAML 用例文件，因此不会影响用例正文和 schema 校验。
 
+执行数据保存在：
+
+```text
+test-runs/*.json
+```
+
+这些文件是后续生成测试报告的重要数据来源。测试计划按启动目录隔离，适合围绕单个需求、版本或模块做执行统计。
+
 ## 开发
 
 本地开发安装：
@@ -271,26 +354,12 @@ pip install -e .
 ```bash
 casebook init /tmp/casebook-demo
 cd /tmp/casebook-demo
-casebook serve releases
+casebook serve releases/example
 ```
 
 在源码模式下也可以直接运行：
 
 ```bash
 python -m casebook.cli init /tmp/casebook-demo
-python -m casebook.cli serve releases
+python -m casebook.cli serve releases/example
 ```
-
-## 设计理念
-
-传统测试用例往往散落在表格、文档和测试管理平台里，格式难统一，版本难追踪，AI 也很难稳定复用。
-
-Casebook 将用例工程化：
-
-- 用 `docs/requirements/` 承载需求输入。
-- 用 `.agents/skills/` 固化测试设计方法。
-- 用 `schema/` 固化结构约束。
-- 用 `releases/` 存放可版本化的 YAML 用例。
-- 用本地 Web UI 完成审阅、标记和编辑。
-
-这让测试用例变成可以被 AI 生成、被 schema 校验、被 Git 管理、被人高效评审的工程资产。
