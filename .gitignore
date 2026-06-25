@@ -52,7 +52,6 @@ Pipfile.lock
 # sphinx/read the docs
 docs/_build/
 
-*.html
 assets/
 
 .nyc_output
