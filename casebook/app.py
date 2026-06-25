@@ -6,7 +6,7 @@ import atexit
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, Response, jsonify, render_template, request, stream_with_context
+from flask import Flask, Response, jsonify, render_template, request, send_from_directory, stream_with_context
 
 from . import __version__
 from .editor import CaseEditor, CaseNotFoundError, EditConflictError
@@ -79,7 +79,7 @@ def create_app(
 
     @app.get("/favicon.ico")
     def favicon():
-        return Response(status=204)
+        return send_from_directory(app.static_folder, "favicon.svg", mimetype="image/svg+xml")
 
     @app.get("/api/summary")
     def api_summary():
@@ -138,7 +138,6 @@ def create_app(
             name=payload.get("name"),
             scope=store.scan_dirs,
             environment=payload.get("environment"),
-            build=payload.get("build"),
             tester=payload.get("tester"),
         )
         broker.publish({
@@ -154,6 +153,25 @@ def create_app(
             return jsonify(runs.get_run(run_id, scope=store.scan_dirs))
         except RunNotFoundError:
             return jsonify({"error": f"Test run not found: {run_id}"}), 404
+
+    @app.patch("/api/test-runs/<run_id>")
+    def api_complete_test_run(run_id: str):
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = runs.complete_run(
+                run_id=run_id,
+                environment=payload.get("environment"),
+                tester=payload.get("tester"),
+                scope=store.scan_dirs,
+            )
+        except RunNotFoundError:
+            return jsonify({"error": f"Test run not found: {run_id}"}), 404
+        broker.publish({
+            "type": "test_run",
+            "action": "completed",
+            "run_id": run_id,
+        })
+        return jsonify(result)
 
     @app.patch("/api/test-runs/<run_id>/results")
     def api_update_test_result(run_id: str):

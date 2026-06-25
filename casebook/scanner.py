@@ -153,11 +153,17 @@ class CasebookStore:
         with self._lock:
             cases = [case for entry in self._entries for case in entry["cases"]]
             stats = compute_stats(cases)
+            owners: list[str] = []
+            for entry in self._entries:
+                owner = str(entry.get("owner") or "").strip()
+                if owner and owner != "N/A" and owner not in owners:
+                    owners.append(owner)
             return {
                 "version": self.version,
                 "scan_dirs": self.scan_dirs,
                 "files": len(self._entries),
                 "cases": len(cases),
+                "owners": owners,
                 "stats": stats,
             }
 

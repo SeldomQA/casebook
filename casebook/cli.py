@@ -157,6 +157,37 @@ def init(
     initialize_project(project, force=force)
 
 
+@app.command(help="Generate an HTML test report from a test run JSON file.")
+def report(
+    run_file: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Path to a test-runs/*.json file.",
+        ),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Output HTML path. Defaults to <run-file>.html."),
+    ] = None,
+    project_root: Annotated[
+        Path | None,
+        typer.Option("--project-root", help="Project root. Defaults to the parent of test-runs/ or cwd."),
+    ] = None,
+) -> None:
+    from .report import ReportError, generate_report
+
+    try:
+        target = generate_report(run_file, output_file=output, project_root=project_root)
+    except ReportError as exc:
+        typer.echo(f"casebook report: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"Generated report: {target}")
+
+
 def main(argv: list[str] | None = None) -> None:
     app(args=argv)
 

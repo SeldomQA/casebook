@@ -44,7 +44,16 @@ class TestRunStore:
                     "result_counts": self._result_counts(run_data),
                     "result_total": len(run_data.get("results") or {}),
                 })
-            runs.sort(key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""), reverse=True)
+            runs.sort(
+                key=lambda item: str(
+                    item.get("completed_at")
+                    or item.get("updated_at")
+                    or item.get("started_at")
+                    or item.get("created_at")
+                    or ""
+                ),
+                reverse=True,
+            )
             return runs
 
     def create_run(
@@ -52,7 +61,6 @@ class TestRunStore:
         name: str | None = None,
         scope: list[str] | None = None,
         environment: str | None = None,
-        build: str | None = None,
         tester: str | None = None,
     ) -> dict[str, Any]:
         with self._lock:
@@ -66,15 +74,43 @@ class TestRunStore:
                     "status": "in_progress",
                     "scope": self._normalize_scope(scope) or [],
                     "environment": str(environment or "").strip(),
-                    "build": str(build or "").strip(),
                     "tester": str(tester or "").strip(),
-                    "created_at": now,
                     "started_at": now,
-                    "updated_at": now,
                     "completed_at": None,
                 },
                 "results": {},
             }
+            self._save(run_id, data)
+            return data
+
+    def complete_run(
+        self,
+        run_id: str,
+        environment: str | None = None,
+        tester: str | None = None,
+        scope: list[str] | None = None,
+    ) -> dict[str, Any]:
+        with self._lock:
+            data = self._load(run_id)
+            expected_scope = self._normalize_scope(scope)
+            if expected_scope is not None:
+                run = data.get("run") or {}
+                if not isinstance(run, dict) or self._normalize_scope(run.get("scope")) != expected_scope:
+                    raise RunNotFoundError(run_id)
+
+            now = self._now()
+            run = data.setdefault("run", {})
+            if not isinstance(run, dict):
+                run = {}
+                data["run"] = run
+            run["status"] = "completed"
+            run["environment"] = str(environment or "").strip()
+            run["tester"] = str(tester or "").strip()
+            run["started_at"] = str(run.get("started_at") or run.get("created_at") or now)
+            run["completed_at"] = now
+            run.pop("build", None)
+            run.pop("created_at", None)
+            run.pop("updated_at", None)
             self._save(run_id, data)
             return data
 
@@ -140,7 +176,11 @@ class TestRunStore:
             results[key] = next_result
             run = data.setdefault("run", {})
             if isinstance(run, dict):
-                run["updated_at"] = now
+                run["started_at"] = str(run.get("started_at") or run.get("created_at") or now)
+                run["completed_at"] = now
+                run.pop("build", None)
+                run.pop("created_at", None)
+                run.pop("updated_at", None)
             self._save(run_id, data)
             return {"key": key, "result": next_result, "run": data}
 

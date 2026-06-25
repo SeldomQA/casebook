@@ -50,6 +50,9 @@ function bindElements() {
     "runSelect",
     "runNameInput",
     "createRunButton",
+    "runEnvironmentInput",
+    "runTesterInput",
+    "completeRunButton",
     "executionProgressBar",
     "executionProgressText",
     "executionStats",
@@ -90,6 +93,7 @@ function bindEvents() {
   els.executionToggle.addEventListener("click", toggleTestPlanPanel);
   els.runSelect.addEventListener("change", () => selectRun(els.runSelect.value));
   els.createRunButton.addEventListener("click", createRun);
+  els.completeRunButton.addEventListener("click", completeRun);
   els.caseSearch.addEventListener("input", () => {
     state.query = els.caseSearch.value.trim().toLowerCase();
     renderCaseRows();
@@ -419,6 +423,7 @@ function renderExecutionPanel() {
   const stats = testPlanStats();
   const percent = stats.total ? Math.round((stats.executed / stats.total) * 100) : 0;
   const run = state.currentRun?.run;
+  const defaults = testPlanDefaults();
 
   els.executionPanel.classList.toggle("expanded", state.testPlanExpanded);
   els.executionPanel.classList.toggle("collapsed", !state.testPlanExpanded);
@@ -436,6 +441,11 @@ function renderExecutionPanel() {
   ];
   els.runSelect.innerHTML = options.join("");
   els.runSelect.value = state.currentRunId || "";
+  els.runEnvironmentInput.value = run?.environment || defaults.environment;
+  els.runTesterInput.value = run?.tester || defaults.tester;
+  els.runEnvironmentInput.disabled = !state.currentRunId;
+  els.runTesterInput.disabled = !state.currentRunId;
+  els.completeRunButton.disabled = !state.currentRunId;
 
   els.executionProgressBar.style.width = `${percent}%`;
   els.executionStats.innerHTML = [
@@ -771,7 +781,27 @@ async function createRun() {
   state.runs = await api("/api/test-runs");
   renderExecutionPanel();
   renderCaseRows();
-  showToast("Test plan created");
+  showToast("已成功创建测试计划");
+}
+
+async function completeRun() {
+  if (!state.currentRunId) {
+    showToast("Select or create a test plan first");
+    return;
+  }
+  const defaults = testPlanDefaults();
+  const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      environment: els.runEnvironmentInput.value.trim() || defaults.environment,
+      tester: els.runTesterInput.value.trim() || defaults.tester,
+    }),
+  });
+  state.currentRun = response;
+  state.runs = await api("/api/test-runs");
+  renderExecutionPanel();
+  renderCaseRows();
+  showToast("已成功完成测试计划");
 }
 
 async function updateExecutionStatus(caseId, status) {
@@ -831,6 +861,13 @@ function toggleTestPlanPanel() {
 
 function scopeLabel() {
   return (state.summary?.scan_dirs || []).join(", ") || "No scope";
+}
+
+function testPlanDefaults() {
+  return {
+    environment: "测试环境",
+    tester: (state.summary?.owners || []).join(", "),
+  };
 }
 
 function findCase(caseId) {
