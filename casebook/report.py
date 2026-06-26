@@ -39,6 +39,7 @@ class CaseRecord:
     case_type: str
     status: str
     notes: str
+    defects: list[str]
     executed_at: str
 
 
@@ -211,7 +212,10 @@ def render_report_html(data: dict[str, Any]) -> str:
     .priority-p0 {{ color: #c62920; background: #ffe5e2; }}
     .priority-p1 {{ color: #996900; background: #fff1cc; }}
     .priority-p2 {{ color: #007c82; background: #dff8fa; }}
-    .notes {{ max-width: 440px; white-space: pre-wrap; color: #394253; }}
+    .notes {{ max-width: 360px; white-space: pre-wrap; color: #394253; }}
+    .defects {{ max-width: 280px; color: #394253; }}
+    .defects a {{ color: #0759b8; font-weight: 800; text-decoration: none; word-break: break-all; }}
+    .defects a:hover {{ text-decoration: underline; }}
     .empty {{ padding: 26px 30px; color: var(--muted); font-weight: 700; }}
     @media (max-width: 980px) {{
       .stats-grid {{ grid-template-columns: repeat(2, minmax(120px, 1fr)); }}
@@ -364,6 +368,7 @@ def _record_from_case(
         case_type=str(case.get("type") or ""),
         status=status,
         notes=str(result.get("notes") or ""),
+        defects=_normalize_defects(result.get("defects")),
         executed_at=str(result.get("executed_at") or ""),
     )
 
@@ -439,7 +444,7 @@ def _case_table(title: str, records: list[CaseRecord]) -> str:
           <h2>{_html(title)}</h2>
           <span>{len(records)} cases</span>
         </div>
-        {f'<table><thead><tr><th>Case</th><th>Title</th><th>Priority</th><th>File</th><th>Notes</th><th>Executed At</th></tr></thead><tbody>{rows}</tbody></table>' if rows else body}
+        {f'<table><thead><tr><th>Case</th><th>Title</th><th>Priority</th><th>File</th><th>Notes</th><th>Defects</th><th>Executed At</th></tr></thead><tbody>{rows}</tbody></table>' if rows else body}
       </div>
     """
 
@@ -453,9 +458,32 @@ def _case_row(record: CaseRecord) -> str:
         <td><span class="priority {priority_class}">{_html(record.priority)}</span></td>
         <td>{_html(record.file_path)}</td>
         <td class="notes">{_html(record.notes or "-")}</td>
+        <td class="defects">{_defects_html(record.defects)}</td>
         <td>{_html(record.executed_at or "-")}</td>
       </tr>
     """
+
+
+def _normalize_defects(value: Any) -> list[str]:
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, str):
+        items = value.replace(",", "\n").splitlines()
+    else:
+        items = []
+    return [str(item).strip() for item in items if str(item).strip()]
+
+
+def _defects_html(defects: list[str]) -> str:
+    if not defects:
+        return "-"
+    items = []
+    for defect in defects:
+        if defect.startswith(("http://", "https://")):
+            items.append(f'<a href="{_html(defect)}" target="_blank" rel="noopener noreferrer">{_html(defect)}</a>')
+        else:
+            items.append(_html(defect))
+    return "<br>".join(items)
 
 
 def _legend(rows: list[dict[str, Any]]) -> str:

@@ -621,6 +621,7 @@ function renderExecutionActions(caseId, currentStatus) {
 
 function renderExecutionDetails(caseItem) {
   const result = executionResult(caseItem.id) || {};
+  const defects = Array.isArray(result.defects) ? result.defects.join("\n") : (result.defects || "");
   return `
     <section class="detail-section execution-detail-section">
       <h5>${detailIcon("Execution")}<span>Execution</span></h5>
@@ -628,6 +629,10 @@ function renderExecutionDetails(caseItem) {
         <label>
           <span>Notes</span>
           <textarea data-exec-notes="${escapeAttr(caseItem.id)}" rows="3" placeholder="Execution notes">${escapeHtml(result.notes || "")}</textarea>
+        </label>
+        <label>
+          <span>Defects</span>
+          <textarea data-exec-defects="${escapeAttr(caseItem.id)}" rows="2" placeholder="Bug links or defect IDs, one per line">${escapeHtml(defects)}</textarea>
         </label>
         <button class="outline-button execution-save-button" type="button" data-save-execution="1" data-case-id="${escapeAttr(caseItem.id)}"${state.currentRun ? "" : " disabled"}>Save execution</button>
       </div>
@@ -833,12 +838,14 @@ async function saveExecutionDetails(caseId) {
     return;
   }
   const notes = document.querySelector(`[data-exec-notes="${cssEscape(caseId)}"]`)?.value || "";
+  const defects = document.querySelector(`[data-exec-defects="${cssEscape(caseId)}"]`)?.value || "";
   const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}/results`, {
     method: "PATCH",
     body: JSON.stringify({
       file_path: state.currentData.path,
       case_id: caseId,
       notes,
+      defects: arrayFromText(defects),
     }),
   });
   state.currentRun = response.run;
