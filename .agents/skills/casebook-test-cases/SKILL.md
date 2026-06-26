@@ -88,7 +88,8 @@ Allowed `type` values are `functional`, `ui`, `security`, `performance`, `access
 ## ID Rules
 
 - Use format `TC_<FEATURE_PREFIX>_<NNN>`, for example `TC_LOGIN_001`.
-- Use uppercase letters, numbers, and underscores in the feature prefix.
+- Use a short uppercase English feature prefix for `{FEATURE_PREFIX}`. Use only uppercase letters, numbers, and underscores.
+- Use exactly three digits for the numeric suffix. Pad with leading zeros, such as `001`, `018`, or `120`.
 - Keep IDs globally unique across `releases/`.
 - When extending an existing file, continue from the highest existing numeric suffix.
 - When creating a new file, choose a short feature prefix from the module and feature name.
