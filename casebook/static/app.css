@@ -507,7 +507,15 @@ body.resizing-sidebar .app-shell {
 
 .execution-controls {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.execution-control-row {
+  display: flex;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
@@ -1482,6 +1490,11 @@ body.resizing-sidebar .app-shell {
 
   .execution-controls {
     justify-content: flex-start;
+    align-items: flex-start;
+  }
+
+  .execution-control-row {
+    justify-content: flex-start;
   }
 
   .execution-stats {
@@ -1532,6 +1545,15 @@ body.resizing-sidebar .app-shell {
 
   .execution-controls select,
   .execution-controls input {
+    width: 100%;
+  }
+
+  .execution-control-row {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .execution-control-row button {
     width: 100%;
   }
 

@@ -62,12 +62,17 @@
               <h3 id="executionScopeTitle">Loading...</h3>
             </div>
             <div class="execution-controls">
-              <select id="runSelect" aria-label="Select test plan"></select>
-              <input id="runNameInput" type="text" placeholder="New test plan name">
-              <button class="primary-button" id="createRunButton" type="button">Create plan</button>
-              <input id="runEnvironmentInput" type="text" placeholder="Environment">
-              <input id="runTesterInput" type="text" placeholder="Tester">
-              <button class="primary-button success-button" id="completeRunButton" type="button">Complete plan</button>
+              <div class="execution-control-row">
+                <select id="runSelect" aria-label="Select test plan"></select>
+                <input id="runNameInput" type="text" placeholder="New test plan name">
+                <button class="primary-button" id="createRunButton" type="button">Create plan</button>
+              </div>
+              <div class="execution-control-row">
+                <input id="runEnvironmentInput" type="text" placeholder="Environment">
+                <input id="runTesterInput" type="text" placeholder="Tester">
+                <button class="primary-button success-button" id="completeRunButton" type="button">Complete
+                  plan</button>
+              </div>
             </div>
           </div>
           <div class="execution-progress">
