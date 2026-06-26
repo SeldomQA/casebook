@@ -59,6 +59,7 @@ function bindElements() {
     "fileMeta",
     "caseSearch",
     "priorityFilters",
+    "renumberIdsButton",
     "caseRows",
     "noResults",
     "editorDrawer",
@@ -94,6 +95,7 @@ function bindEvents() {
   els.runSelect.addEventListener("change", () => selectRun(els.runSelect.value));
   els.createRunButton.addEventListener("click", createRun);
   els.completeRunButton.addEventListener("click", completeRun);
+  els.renumberIdsButton.addEventListener("click", renumberCurrentFile);
   els.caseSearch.addEventListener("input", () => {
     state.query = els.caseSearch.value.trim().toLowerCase();
     renderCaseRows();
@@ -446,6 +448,7 @@ function renderExecutionPanel() {
   els.runEnvironmentInput.disabled = !state.currentRunId;
   els.runTesterInput.disabled = !state.currentRunId;
   els.completeRunButton.disabled = !state.currentRunId;
+  syncRenumberButton();
 
   els.executionProgressBar.style.width = `${percent}%`;
   els.executionStats.innerHTML = [
@@ -460,6 +463,16 @@ function renderExecutionPanel() {
       <span>${label}</span>
     </div>
   `).join("");
+}
+
+function syncRenumberButton() {
+  if (!els.renumberIdsButton) return;
+  const inTestPlanMode = Boolean(state.currentRunId);
+  const disabled = !state.currentData || inTestPlanMode;
+  els.renumberIdsButton.disabled = disabled;
+  els.renumberIdsButton.title = inTestPlanMode
+    ? "测试计划模式下不能更新用例 ID"
+    : "按当前 YAML 文件顺序更新用例 ID";
 }
 
 function testPlanStats() {
@@ -747,6 +760,37 @@ async function saveCase() {
     }
   } catch (error) {
     state.dirty = true;
+    showToast(error.message);
+  }
+}
+
+async function renumberCurrentFile() {
+  if (!state.currentData) return;
+  if (state.currentRunId) {
+    showToast("测试计划模式下不能更新用例 ID");
+    return;
+  }
+  const confirmed = window.confirm("将按当前 YAML 文件顺序更新用例 ID，当前顺序不会改变。继续？");
+  if (!confirmed) return;
+
+  const filePath = state.currentData.path;
+  try {
+    const response = await api(`/api/files/${encodePath(filePath)}/renumber`, {
+      method: "POST",
+      body: JSON.stringify({
+        mtime_ns: state.currentData.mtime_ns,
+        current_run_id: state.currentRunId,
+      }),
+    });
+    state.marks = response.marks || state.marks;
+    state.expandedCaseIds = new Set();
+    if (state.selectedCaseId) closeDrawer();
+    await refreshAll();
+    await loadFile(filePath, { keepFilter: true });
+    const changed = Number(response.result?.changed || 0);
+    const total = Number(response.result?.total || 0);
+    showToast(changed ? `已更新 ${changed}/${total} 个用例 ID` : "用例 ID 已经连续，无需更新");
+  } catch (error) {
     showToast(error.message);
   }
 }

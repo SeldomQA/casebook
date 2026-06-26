@@ -52,3 +52,24 @@ class MarksStore:
                 marked = True
             self._save(marks)
             return {"key": key, "marked": marked, "marks": marks}
+
+    def remap_case_ids(self, file_path: str, mapping: list[dict[str, Any]]) -> dict[str, Any]:
+        id_map = {
+            str(item.get("old_id") or ""): str(item.get("new_id") or "")
+            for item in mapping
+            if item.get("old_id") and item.get("new_id")
+        }
+        prefix = f"{file_path}#"
+        with self._lock:
+            marks = self._load()
+            remapped: dict[str, Any] = {}
+            for key, value in marks.items():
+                if not key.startswith(prefix):
+                    remapped[key] = value
+                    continue
+                old_id = key[len(prefix):]
+                new_id = id_map.get(old_id)
+                if new_id:
+                    remapped[self.key(file_path, new_id)] = value
+            self._save(remapped)
+            return remapped

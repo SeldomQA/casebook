@@ -11,6 +11,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_from_
 from . import __version__
 from .editor import CaseEditor, CaseNotFoundError, EditConflictError
 from .marks import MarksStore
+from .renumber import CaseIdRenumberError, CaseIdRenumberer
 from .runs import InvalidRunError, RunNotFoundError, TestRunStore
 from .scanner import CasebookStore
 from .watcher import CasebookWatcher
@@ -44,6 +45,7 @@ def create_app(
     app = Flask(__name__)
     store = CasebookStore(project_root=project_root, scan_dirs=scan_dirs)
     editor = CaseEditor(project_root=project_root)
+    renumberer = CaseIdRenumberer(project_root=project_root)
     marks = MarksStore(project_root=project_root)
     runs = TestRunStore(project_root=project_root)
     broker = EventBroker()
@@ -106,6 +108,33 @@ def create_app(
         }
         entry["needs_update_count"] = len(entry["marks"])
         return jsonify(entry)
+
+    @app.post("/api/files/<path:file_path>/renumber")
+    def api_renumber_file(file_path: str):
+        payload = request.get_json(silent=True) or {}
+        current_run_id = payload.get("current_run_id") or payload.get("currentRunId")
+        if current_run_id:
+            return jsonify({"error": "测试计划模式下不能更新用例 ID"}), 409
+        try:
+            result = renumberer.renumber_file(file_path, mtime_ns=payload.get("mtime_ns"))
+        except FileNotFoundError:
+            return jsonify({"error": f"File not found: {file_path}"}), 404
+        except CaseIdRenumberError as exc:
+            code = "edit_conflict" if "changed after it was loaded" in str(exc) else "renumber_failed"
+            status = 409 if code == "edit_conflict" else 400
+            return jsonify({"error": str(exc), "code": code}), status
+        updated_marks = marks.remap_case_ids(file_path, result["mapping"])
+        summary = refresh_and_publish("renumber")
+        broker.publish({
+            "type": "marks",
+            "file_path": file_path,
+        })
+        return jsonify({
+            "status": "ok",
+            "result": result,
+            "marks": updated_marks,
+            "summary": summary,
+        })
 
     @app.get("/api/marks")
     def api_marks():

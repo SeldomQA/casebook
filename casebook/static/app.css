@@ -207,6 +207,19 @@ body.sidebar-collapsed .sidebar {
   background: var(--primary-soft);
 }
 
+.outline-button:disabled {
+  border-color: var(--line);
+  background: #f5f5f5;
+  color: var(--muted-2);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.outline-button:disabled:hover {
+  border-color: var(--line);
+  background: #f5f5f5;
+}
+
 .sidebar-resizer {
   position: absolute;
   top: 0;
@@ -727,8 +740,24 @@ body.resizing-sidebar .app-shell {
 .case-card-actions {
   flex: 1;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 360px;
+}
+
+.case-list-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.renumber-button {
+  white-space: nowrap;
 }
 
 .case-list-controls .filter-button {
@@ -1446,6 +1475,11 @@ body.resizing-sidebar .app-shell {
     justify-content: flex-start;
   }
 
+  .case-list-tools {
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
   .case-card-actions .filter-group {
     justify-content: flex-start;
   }
@@ -1564,6 +1598,16 @@ body.resizing-sidebar .app-shell {
   .case-card-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .case-list-tools {
+    flex-direction: column;
+    align-items: stretch;
+    margin-left: 0;
+  }
+
+  .renumber-button {
+    align-self: flex-start;
   }
 
   .case-summary {

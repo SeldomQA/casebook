@@ -244,6 +244,39 @@ def report(
     typer.echo(f"Generated report: {target}")
 
 
+@app.command(help="Renumber test case IDs in one YAML file.")
+def renumber(
+    yaml_file: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="YAML test case file to renumber.",
+        ),
+    ],
+) -> None:
+    from .renumber import CaseIdRenumberError, CaseIdRenumberer
+
+    try:
+        result = CaseIdRenumberer(Path.cwd()).renumber_file(str(yaml_file))
+    except FileNotFoundError:
+        typer.echo(f"casebook renumber: file not found: {yaml_file}", err=True)
+        raise typer.Exit(1) from None
+    except CaseIdRenumberError as exc:
+        typer.echo(f"casebook renumber: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(
+        f"Renumbered {result['file_path']}: "
+        f"{result['changed']}/{result['total']} IDs changed."
+    )
+    for item in result["mapping"]:
+        if item["changed"]:
+            typer.echo(f"  {item['old_id']} -> {item['new_id']}")
+
+
 def main(argv: list[str] | None = None) -> None:
     app(args=argv)
 
