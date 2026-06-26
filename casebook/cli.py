@@ -1,16 +1,23 @@
 from __future__ import annotations
 
-import logging
+import sys
 import webbrowser
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from loguru import logger
 
 from . import __version__
 
 
-LOGGER = logging.getLogger("casebook.main")
+CASEBOOK_BANNER = r"""
+   ______                 __                __
+  / ____/___ _________   / /_  ____  ____  / /__
+ / /   / __ `/ ___/ _ \ / __ \/ __ \/ __ \/ //_/
+/ /___/ /_/ (__  )  __// /_/ / /_/ / /_/ / ,<
+\____/\__,_/____/\___//_.___/\____/\____/_/|_|
+"""
 
 app = typer.Typer(
     help="Render, review, and edit YAML test cases locally.",
@@ -20,10 +27,11 @@ app = typer.Typer(
 
 
 def configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(asctime)s] %(levelname)s/%(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        level="INFO",
+        format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level:<8}</level> | <cyan>casebook</cyan> - <level>{message}</level>",
     )
 
 
@@ -31,6 +39,38 @@ def version_callback(value: bool) -> None:
     if value:
         typer.echo(f"casebook {__version__}")
         raise typer.Exit()
+
+
+def _shorten_banner_value(value: object, max_length: int = 72) -> str:
+    text = str(value or "").strip()
+    if len(text) <= max_length:
+        return text
+    return f"{text[:max_length - 3]}..."
+
+
+def _serve_banner(
+    url: str,
+    scan_dirs: list[str],
+    files: object,
+    cases: object,
+    watch: bool,
+) -> str:
+    rows = [
+        ("Version", f"v{__version__}"),
+        ("Local UI", url),
+        ("Scope", _shorten_banner_value(", ".join(scan_dirs) or ".")),
+        ("Loaded", f"{files or 0} files, {cases or 0} cases"),
+        ("Watch", "enabled" if watch else "disabled"),
+        ("Stop", "Press Ctrl+C"),
+    ]
+    width = max(len(f"{label}: {value}") for label, value in rows)
+    box_width = width + ((width + 1) // 2)
+    line = f"+-{'-' * box_width}-+"
+    body = "\n".join(
+        f"| {label}: {value}{' ' * (box_width - len(f'{label}: {value}'))} |"
+        for label, value in rows
+    )
+    return f"{CASEBOOK_BANNER}\n{line}\n{body}\n{line}"
 
 
 @app.callback()
@@ -55,32 +95,45 @@ def serve_project(
     open_browser: bool = False,
     watch: bool = True,
 ) -> None:
-    from werkzeug.serving import make_server
+    from werkzeug.serving import WSGIRequestHandler, make_server
 
     from .app import create_app
 
+    class LoguruRequestHandler(WSGIRequestHandler):
+        def log(self, type: str, message: str, *args: object) -> None:
+            level = type.upper()
+            if level not in {"TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"}:
+                level = "INFO"
+            address = self.address_string().replace("%", "%%")
+            logger.log(level, "{} - - [{}] {}", address,
+                       self.log_date_time_string(), message % args)
+
     project_root = Path.cwd()
-    flask_app = create_app(project_root=project_root, scan_dirs=paths, watch=watch)
+    flask_app = create_app(project_root=project_root,
+                           scan_dirs=paths, watch=watch)
     summary = flask_app.config.get("CASEBOOK_INITIAL_SUMMARY", {})
     url = f"http://{host}:{port}"
     browser_url = f"http://localhost:{port}" if host in {
         "127.0.0.1", "::"} else url
+    scan_dirs = summary.get("scan_dirs", paths or [])
 
-    LOGGER.info("Starting web interface at %s", url)
-    LOGGER.info("Starting Casebook %s", __version__)
-    LOGGER.info("Watching YAML cases in %s", ", ".join(
-        summary.get("scan_dirs", paths or [])))
-    LOGGER.info("Loaded %s files, %s cases", summary.get(
-        "files", 0), summary.get("cases", 0))
+    typer.echo(_serve_banner(
+        url=url,
+        scan_dirs=scan_dirs,
+        files=summary.get("files", 0),
+        cases=summary.get("cases", 0),
+        watch=watch,
+    ))
 
     if open_browser:
         webbrowser.open(browser_url)
 
-    server = make_server(host, port, flask_app, threaded=True)
+    server = make_server(host, port, flask_app, threaded=True,
+                         request_handler=LoguruRequestHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        LOGGER.info("Stopping Casebook")
+        logger.info("Stopping Casebook")
     finally:
         server.server_close()
 
@@ -171,17 +224,20 @@ def report(
     ],
     output: Annotated[
         Path | None,
-        typer.Option("--output", "-o", help="Output HTML path. Defaults to <run-file>.html."),
+        typer.Option("--output", "-o",
+                     help="Output HTML path. Defaults to <run-file>.html."),
     ] = None,
     project_root: Annotated[
         Path | None,
-        typer.Option("--project-root", help="Project root. Defaults to the parent of test-runs/ or cwd."),
+        typer.Option(
+            "--project-root", help="Project root. Defaults to the parent of test-runs/ or cwd."),
     ] = None,
 ) -> None:
     from .report import ReportError, generate_report
 
     try:
-        target = generate_report(run_file, output_file=output, project_root=project_root)
+        target = generate_report(
+            run_file, output_file=output, project_root=project_root)
     except ReportError as exc:
         typer.echo(f"casebook report: {exc}", err=True)
         raise typer.Exit(1) from exc
