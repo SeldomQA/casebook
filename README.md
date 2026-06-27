@@ -4,8 +4,7 @@ Casebook 是面向 AI Agent 时代的测试用例工程化工作流。
 
 > 测试工程师应该使用 Lingma、Trae、Codex、Claude Code、Cursor 等 AI Agent 在项目中理解需求、生成用例、重构用例；Casebook 负责把这些工程化用例变成可以本地浏览、评审、标记、执行和生成报告的工作台。
 
-Casebook 的目标不是替代测试人员，而是把测试人员从重复录入、表格搬运和平台维护里释放出来。
-
+Casebook 不是另一个测试用例管理平台，而是在 AI Agent 时代重新定义测试用例资产该如何被创建、维护和使用。
 
 ## 设计理念
 
@@ -50,12 +49,20 @@ docs/requirements/ 需求文档
     -> HTML 测试报告
 ```
 
-这也是 Casebook 和传统平台最大的区别：
+这也是 Casebook 和一般AI测试用例平台最大的区别：
 
-| 对比维度 | 传统AI测试用例平台 | Casebook |
+| 对比维度 | 一般 AI 测试用例平台 | Casebook |
 | --- | --- | --- |
-| 工作中心 | 上传、生成、下载、导入 | 项目、Agent、Schema、Git、本地工作台、执行证据 |
-| 用例维护 | 留在页面表单里，通过 CRUD 逐条维护 | 交给 AI Agent 修改 YAML，把人的精力留给评审、执行和判断 |
+| 中心 | 测试管理平台 | Git 仓库 + AI Agent |
+| AI 角色 | 生成用例文本的接口 | 理解需求、维护用例、重构资产的生产者 |
+| 用例资产 | 平台数据库记录 | YAML 文件 |
+| 需求资产 | 平台字段、附件、富文本 | `docs/requirements/` 中的 Markdown/文档 |
+| 约束方式 | 平台表单和后端校验 | `schema/test-case-schema.json` |
+| 协作方式 | 平台流程 | Git diff / PR / Code Review |
+| 人的工作 | 填表、编辑、维护状态 | Review、判断、执行、验收 |
+| 去掉 AI 后 | 平台仍完整运行 | Casebook 仍能浏览/执行，但用例生产和持续维护能力大幅下降 |
+
+传统平台本质上是“人填数据，AI 辅助生成”。Casebook 本质上是“AI 维护工程资产，人做质量判断”。
 
 
 ## 安装
