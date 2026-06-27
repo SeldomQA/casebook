@@ -84,6 +84,7 @@ casebook --help
 │ serve  Start the local Casebook web UI.                                                     │
 │ init   Create a new Casebook test case project.                                             │
 │ report Generate an HTML test report from a test run JSON file.                              │
+│ renumber  Renumber test case IDs in one YAML file.                                          │
 ╰─────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -139,8 +140,10 @@ http://127.0.0.1:8089
 - 展开用例查看前置条件、步骤和预期结果。
 - 使用 Mark 标记需要关注或后续调整的用例。
 - 对已有用例做轻量编辑，并保存回 YAML 文件。
+- 评审插入或删除用例后，使用 `ID 更新` 按当前 YAML 顺序重排用例 ID。
 
 > 如果评审后需要新增、删除、拆分或重构用例，推荐继续交给 AI Agent 修改 YAML，而不是在页面中逐条维护。
+> `ID 更新` 只适合评审阶段；选择测试计划后会禁用，避免执行结果和用例 ID 错位。
 
 ### 4. 创建测试计划并执行用例
 
@@ -150,7 +153,7 @@ http://127.0.0.1:8089
 
 - 创建或选择测试计划。
 - 为每条用例选择 `Passed`、`Failed` 或 `Blocked`。
-- 记录执行备注。
+- 记录执行备注和 JIRA 缺陷链接。
 - 查看执行进度条和统计数据。
 - 点击 `Complete plan` 完成测试计划，并写入测试环境和测试人员。
 
@@ -179,8 +182,8 @@ casebook report test-runs/run-20260625093000-login-smoke.json --output reports/l
 - 测试计划基本信息。
 - 执行概览和通过率统计。
 - ECharts 图表。
-- 失败用例列表。
-- 阻塞用例列表。
+- 失败用例列表，包含执行备注和缺陷链接。
+- 阻塞用例列表，包含执行备注和缺陷链接。
 
 到这里，一个从需求、AI 生成用例、本地评审、用例执行到 HTML 测试报告的 Casebook 闭环就完成了。
 
@@ -190,6 +193,7 @@ casebook report test-runs/run-20260625093000-login-smoke.json --output reports/l
 README 只保留产品理念和快速旅程，完整教程放在独立文档中，避免首次阅读过长：
 
 - [使用 AI Agent 生成用例](./docs/casebook-instructions.md#使用-ai-agent-生成用例)
+- [用例 ID 重排](./docs/casebook-instructions.md#用例-id-重排)
 - [测试计划与用例执行](./docs/casebook-instructions.md#测试计划与用例执行)
 - [项目状态文件](./docs/casebook-instructions.md#项目状态文件)
 - [HTML 测试报告](./docs/casebook-instructions.md#html-测试报告)
