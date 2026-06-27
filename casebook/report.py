@@ -480,7 +480,8 @@ def _defects_html(defects: list[str]) -> str:
     items = []
     for defect in defects:
         if defect.startswith(("http://", "https://")):
-            items.append(f'<a href="{_html(defect)}" target="_blank" rel="noopener noreferrer">{_html(defect)}</a>')
+            items.append(
+                f'<a href="{_html(defect)}" target="_blank" rel="noopener noreferrer">{_html(defect)}</a>')
         else:
             items.append(_html(defect))
     return "<br>".join(items)

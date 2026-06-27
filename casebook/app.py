@@ -55,7 +55,8 @@ def create_app(
 
     def refresh_and_publish(reason: str) -> dict[str, Any]:
         summary = store.refresh()
-        broker.publish({"type": "reload", "reason": reason, "summary": summary})
+        broker.publish(
+            {"type": "reload", "reason": reason, "summary": summary})
         return summary
 
     watcher: CasebookWatcher | None = None
@@ -112,15 +113,18 @@ def create_app(
     @app.post("/api/files/<path:file_path>/renumber")
     def api_renumber_file(file_path: str):
         payload = request.get_json(silent=True) or {}
-        current_run_id = payload.get("current_run_id") or payload.get("currentRunId")
+        current_run_id = payload.get(
+            "current_run_id") or payload.get("currentRunId")
         if current_run_id:
             return jsonify({"error": "测试计划模式下不能更新用例 ID"}), 409
         try:
-            result = renumberer.renumber_file(file_path, mtime_ns=payload.get("mtime_ns"))
+            result = renumberer.renumber_file(
+                file_path, mtime_ns=payload.get("mtime_ns"))
         except FileNotFoundError:
             return jsonify({"error": f"File not found: {file_path}"}), 404
         except CaseIdRenumberError as exc:
-            code = "edit_conflict" if "changed after it was loaded" in str(exc) else "renumber_failed"
+            code = "edit_conflict" if "changed after it was loaded" in str(
+                exc) else "renumber_failed"
             status = 409 if code == "edit_conflict" else 400
             return jsonify({"error": str(exc), "code": code}), status
         updated_marks = marks.remap_case_ids(file_path, result["mapping"])
@@ -143,7 +147,8 @@ def create_app(
     @app.post("/api/marks/toggle")
     def api_toggle_mark():
         payload = request.get_json(silent=True) or {}
-        file_path = str(payload.get("file_path") or payload.get("filePath") or "")
+        file_path = str(payload.get("file_path")
+                        or payload.get("filePath") or "")
         case_id = str(payload.get("case_id") or payload.get("caseId") or "")
         if not file_path or not case_id:
             return jsonify({"error": "Missing file_path or case_id"}), 400
@@ -205,7 +210,8 @@ def create_app(
     @app.patch("/api/test-runs/<run_id>/results")
     def api_update_test_result(run_id: str):
         payload = request.get_json(silent=True) or {}
-        file_path = str(payload.get("file_path") or payload.get("filePath") or "")
+        file_path = str(payload.get("file_path")
+                        or payload.get("filePath") or "")
         case_id = str(payload.get("case_id") or payload.get("caseId") or "")
         if not file_path or not case_id:
             return jsonify({"error": "Missing file_path or case_id"}), 400
@@ -216,7 +222,8 @@ def create_app(
                 case_id=case_id,
                 status=payload.get("status"),
                 notes=payload.get("notes") if "notes" in payload else None,
-                defects=payload.get("defects") if "defects" in payload else None,
+                defects=payload.get(
+                    "defects") if "defects" in payload else None,
                 tester=payload.get("tester") if "tester" in payload else None,
                 scope=store.scan_dirs,
             )
@@ -243,7 +250,8 @@ def create_app(
         if not file_path or not case_id or not isinstance(updates, dict):
             return jsonify({"error": "Missing file_path, case_id, or updates"}), 400
         try:
-            result = editor.update_case(file_path, case_id, updates, mtime_ns=mtime_ns)
+            result = editor.update_case(
+                file_path, case_id, updates, mtime_ns=mtime_ns)
         except EditConflictError as exc:
             return jsonify({"error": str(exc), "code": "edit_conflict"}), 409
         except CaseNotFoundError:
