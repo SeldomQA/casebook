@@ -17,8 +17,17 @@ const state = {
   dirty: false,
   pendingReload: false,
   filter: "all",
+  executionFilter: "all",
   query: "",
 };
+
+const EXECUTION_FILTERS = [
+  ["all", "All"],
+  ["passed", "Passed"],
+  ["failed", "Failed"],
+  ["blocked", "Blocked"],
+  ["untested", "Untested"],
+];
 
 const els = {};
 
@@ -59,6 +68,7 @@ function bindElements() {
     "fileMeta",
     "caseSearch",
     "priorityFilters",
+    "executionFilter",
     "renumberIdsButton",
     "caseRows",
     "noResults",
@@ -104,6 +114,11 @@ function bindEvents() {
     const button = event.target.closest("button[data-filter]");
     if (!button) return;
     state.filter = button.dataset.filter;
+    renderFilters();
+    renderCaseRows();
+  });
+  els.executionFilter.addEventListener("change", () => {
+    state.executionFilter = els.executionFilter.value;
     renderFilters();
     renderCaseRows();
   });
@@ -261,8 +276,10 @@ async function refreshAll() {
   } else {
     state.currentRun = null;
   }
+  normalizeCurrentFilter();
   renderShell();
   renderExecutionPanel();
+  if (state.currentData) renderFilters();
 }
 
 async function api(path, options = {}) {
@@ -296,7 +313,9 @@ function connectEvents() {
     if (state.currentRunId && data.run_id === state.currentRunId) {
       state.currentRun = state.currentRunId ? await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`) : null;
     }
+    normalizeCurrentFilter();
     renderExecutionPanel();
+    renderFilters();
     renderCaseRows();
   });
 }
@@ -374,6 +393,7 @@ async function loadFile(filePath, options = {}) {
   state.currentData = data;
   state.marks = { ...state.marks, ...(data.marks || {}) };
   state.filter = options.keepFilter ? state.filter : "all";
+  state.executionFilter = options.keepFilter ? state.executionFilter : "all";
   state.query = options.keepFilter ? state.query : "";
   if (!options.keepExpanded) {
     state.expandedCaseIds = new Set();
@@ -513,6 +533,7 @@ function executionStatus(caseId) {
 
 function renderFilters() {
   const counts = filterCounts();
+  normalizeCurrentFilter();
   const filters = [
     ["all", "All", counts.all],
     ["P0", "P0", counts.P0],
@@ -530,6 +551,23 @@ function renderFilters() {
         <span class="filter-count">${escapeHtml(count)}</span>
       </button>`;
   }).join("");
+  renderExecutionFilter();
+}
+
+function renderExecutionFilter() {
+  if (!els.executionFilter) return;
+  normalizeCurrentFilter();
+  els.executionFilter.hidden = !state.currentRun;
+  els.executionFilter.disabled = !state.currentRun;
+  if (!state.currentRun) return;
+
+  const counts = executionFilterCounts();
+  els.executionFilter.innerHTML = EXECUTION_FILTERS.map(([value, label]) => {
+    const count = value === "all" ? counts.all : counts[value];
+    return `<option value="${value}">${escapeHtml(label)} (${count || 0})</option>`;
+  }).join("");
+  els.executionFilter.value = state.executionFilter;
+  els.executionFilter.className = `execution-filter status-${state.executionFilter}`;
 }
 
 function filterCounts() {
@@ -546,6 +584,21 @@ function filterCounts() {
     if (priority in counts) {
       counts[priority] += 1;
     }
+  });
+  return counts;
+}
+
+function executionFilterCounts() {
+  const cases = (state.currentData?.cases || []).filter(matchesPrimaryFilter);
+  const counts = {
+    all: cases.length,
+    passed: 0,
+    failed: 0,
+    blocked: 0,
+    untested: 0,
+  };
+  cases.forEach((caseItem) => {
+    counts[executionStatus(caseItem.id)] += 1;
   });
   return counts;
 }
@@ -676,8 +729,8 @@ function toggleCaseDetails(caseId) {
 }
 
 function matchesCurrentFilter(caseItem) {
-  if (state.filter === "needs" && !isMarked(caseItem.id)) return false;
-  if (["P0", "P1", "P2"].includes(state.filter) && caseItem.priority !== state.filter) return false;
+  if (!matchesPrimaryFilter(caseItem)) return false;
+  if (!matchesExecutionFilter(caseItem)) return false;
   if (!state.query) return true;
   const haystack = [
     caseItem.id,
@@ -690,6 +743,27 @@ function matchesCurrentFilter(caseItem) {
     ...(caseItem.tags || []),
   ].join(" ").toLowerCase();
   return haystack.includes(state.query);
+}
+
+function matchesPrimaryFilter(caseItem) {
+  if (state.filter === "needs" && !isMarked(caseItem.id)) return false;
+  if (["P0", "P1", "P2"].includes(state.filter) && caseItem.priority !== state.filter) return false;
+  return true;
+}
+
+function matchesExecutionFilter(caseItem) {
+  if (!state.currentRun || state.executionFilter === "all") return true;
+  return executionStatus(caseItem.id) === state.executionFilter;
+}
+
+function normalizeCurrentFilter() {
+  if (!state.currentRun) {
+    state.executionFilter = "all";
+    return;
+  }
+  if (!EXECUTION_FILTERS.some(([value]) => value === state.executionFilter)) {
+    state.executionFilter = "all";
+  }
 }
 
 function openDrawer(caseId) {
@@ -810,7 +884,9 @@ async function selectRun(runId) {
   state.currentRunId = runId || null;
   state.currentRun = state.currentRunId ? await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`) : null;
   if (state.currentRunId) state.testPlanExpanded = true;
+  normalizeCurrentFilter();
   renderExecutionPanel();
+  renderFilters();
   renderCaseRows();
 }
 
@@ -829,6 +905,7 @@ async function createRun() {
   els.runNameInput.value = "";
   state.runs = await api("/api/test-runs");
   renderExecutionPanel();
+  renderFilters();
   renderCaseRows();
   showToast("已成功创建测试计划");
 }
@@ -872,6 +949,7 @@ async function updateExecutionStatus(caseId, status) {
   state.currentRun = response.run;
   state.runs = await api("/api/test-runs");
   renderExecutionPanel();
+  renderFilters();
   renderCaseRows();
 }
 
