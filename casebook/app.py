@@ -116,7 +116,7 @@ def create_app(
         current_run_id = payload.get(
             "current_run_id") or payload.get("currentRunId")
         if current_run_id:
-            return jsonify({"error": "测试计划模式下不能更新用例 ID"}), 409
+            return jsonify({"error": "Case IDs cannot be updated while a test plan is selected"}), 409
         try:
             result = renumberer.renumber_file(
                 file_path, mtime_ns=payload.get("mtime_ns"))

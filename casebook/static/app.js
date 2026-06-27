@@ -338,7 +338,7 @@ async function reloadAfterExternalChange(force) {
 function renderShell() {
   const summary = state.summary || {};
   els.scanDirs.textContent = (summary.scan_dirs || []).join(", ") || "No scan directory";
-  els.summaryText.textContent = `${summary.files || 0} files · ${summary.cases || 0} cases`;
+  els.summaryText.textContent = `${summary.files || 0} files - ${summary.cases || 0} cases`;
   els.treePanel.innerHTML = renderTree(state.tree, 0);
   markActiveTreeItem();
 }
@@ -454,7 +454,7 @@ function renderExecutionPanel() {
   els.executionScopeTitle.textContent = scope;
   els.executionRunTitle.textContent = run ? `${run.name || run.id}` : "Test plan not enabled";
   els.executionProgressText.textContent = run
-    ? `${stats.executed} / ${stats.total} executed · ${percent}%`
+    ? `${stats.executed} / ${stats.total} executed - ${percent}%`
     : "Not enabled";
 
   const options = [
@@ -491,8 +491,8 @@ function syncRenumberButton() {
   const disabled = !state.currentData || inTestPlanMode;
   els.renumberIdsButton.disabled = disabled;
   els.renumberIdsButton.title = inTestPlanMode
-    ? "测试计划模式下不能更新用例 ID"
-    : "按当前 YAML 文件顺序更新用例 ID";
+    ? "Case IDs cannot be updated while a test plan is selected"
+    : "Update case IDs using the current YAML order";
 }
 
 function testPlanStats() {
@@ -841,10 +841,10 @@ async function saveCase() {
 async function renumberCurrentFile() {
   if (!state.currentData) return;
   if (state.currentRunId) {
-    showToast("测试计划模式下不能更新用例 ID");
+    showToast("Case IDs cannot be updated while a test plan is selected");
     return;
   }
-  const confirmed = window.confirm("将按当前 YAML 文件顺序更新用例 ID，当前顺序不会改变。继续？");
+  const confirmed = window.confirm("Update case IDs using the current YAML order? The case order will not change.");
   if (!confirmed) return;
 
   const filePath = state.currentData.path;
@@ -863,7 +863,7 @@ async function renumberCurrentFile() {
     await loadFile(filePath, { keepFilter: true });
     const changed = Number(response.result?.changed || 0);
     const total = Number(response.result?.total || 0);
-    showToast(changed ? `已更新 ${changed}/${total} 个用例 ID` : "用例 ID 已经连续，无需更新");
+    showToast(changed ? `Updated ${changed}/${total} case IDs` : "Case IDs are already sequential");
   } catch (error) {
     showToast(error.message);
   }
@@ -907,7 +907,7 @@ async function createRun() {
   renderExecutionPanel();
   renderFilters();
   renderCaseRows();
-  showToast("已成功创建测试计划");
+  showToast("Test plan created");
 }
 
 async function completeRun() {
@@ -927,7 +927,7 @@ async function completeRun() {
   state.runs = await api("/api/test-runs");
   renderExecutionPanel();
   renderCaseRows();
-  showToast("已成功完成测试计划");
+  showToast("Test plan completed");
 }
 
 async function updateExecutionStatus(caseId, status) {
@@ -994,7 +994,7 @@ function scopeLabel() {
 
 function testPlanDefaults() {
   return {
-    environment: "测试环境",
+    environment: "Test environment",
     tester: (state.summary?.owners || []).join(", "),
   };
 }

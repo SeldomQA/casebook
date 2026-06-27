@@ -11,10 +11,10 @@ from .scanner import CasebookStore
 
 
 EXECUTION_STATUS_LABELS = {
-    "passed": "已通过",
-    "failed": "未通过",
-    "blocked": "阻塞",
-    "untested": "待测试",
+    "passed": "Passed",
+    "failed": "Failed",
+    "blocked": "Blocked",
+    "untested": "Untested",
 }
 
 EXECUTION_STATUS_COLORS = {
@@ -110,10 +110,10 @@ def render_report_html(data: dict[str, Any]) -> str:
     blocked_cases = data["blocked_cases"]
     chart_data = json.dumps(
         data["chart_data"], ensure_ascii=False).replace("</", "<\\/")
-    title = f"Casebook 测试报告 - {run['name']}"
+    title = f"Casebook Test Report - {run['name']}"
 
     return f"""<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -230,33 +230,33 @@ def render_report_html(data: dict[str, Any]) -> str:
 </head>
 <body>
   <main class="page">
-    <h1 class="title">测试报告</h1>
-    <p class="meta">{_html(run["name"])} · Scope: {_html(", ".join(run["scope"]) or "N/A")} · Generated: {_html(data["generated_at"])}</p>
+    <h1 class="title">Test Report</h1>
+    <p class="meta">{_html(run["name"])} - Scope: {_html(", ".join(run["scope"]) or "N/A")} - Generated: {_html(data["generated_at"])}</p>
     <section class="card plan-card">
-      <h2 class="section-title">计划信息</h2>
+      <h2 class="section-title">Test Plan</h2>
       {_plan_info(run)}
     </section>
     <section class="card overview">
-      <h2 class="section-title">统计信息</h2>
+      <h2 class="section-title">Overview</h2>
       <div class="stats-grid">
-        {_stat("用例总数量", stats["total"], "")}
-        {_stat("已执行", stats["executed"], "")}
-        {_stat("已通过", stats["passed"], "")}
-        {_stat("失败总数", stats["failed"], "failed")}
-        {_stat("阻塞总数", stats["blocked"], "blocked")}
-        {_stat("待测试", stats["untested"], "")}
+        {_stat("Total Cases", stats["total"], "")}
+        {_stat("Executed", stats["executed"], "")}
+        {_stat("Passed", stats["passed"], "")}
+        {_stat("Failed", stats["failed"], "failed")}
+        {_stat("Blocked", stats["blocked"], "blocked")}
+        {_stat("Untested", stats["untested"], "")}
       </div>
     </section>
     <section class="chart-grid">
       <div class="card chart-card">
-        <h2 class="section-title">测试统计</h2>
+        <h2 class="section-title">Execution Stats</h2>
         <div class="chart-body">
           <div class="chart" id="executionChart"></div>
           {_legend(data["chart_data"]["execution"])}
         </div>
       </div>
       <div class="card chart-card">
-        <h2 class="section-title">失败/阻塞优先级</h2>
+        <h2 class="section-title">Failed/Blocked Priority</h2>
         <div class="chart-body">
           <div class="chart" id="priorityChart"></div>
           {_legend(data["chart_data"]["priority"])}
@@ -264,8 +264,8 @@ def render_report_html(data: dict[str, Any]) -> str:
       </div>
     </section>
     <section class="tables">
-      {_case_table("失败用例", failed_cases)}
-      {_case_table("阻塞用例", blocked_cases)}
+      {_case_table("Failed Cases", failed_cases)}
+      {_case_table("Blocked Cases", blocked_cases)}
     </section>
   </main>
   <script>
@@ -299,11 +299,11 @@ def render_report_html(data: dict[str, Any]) -> str:
     }}
     renderDonut("executionChart", reportData.execution, {{
       value: reportData.passRateText,
-      label: "通过率"
+      label: "Pass Rate"
     }});
     renderDonut("priorityChart", reportData.priority, {{
       value: String(reportData.issueTotal),
-      label: "问题数"
+      label: "Issues"
     }});
   </script>
 </body>
@@ -405,13 +405,13 @@ def _chart_data(
         "passRateText": f"{pass_rate:.0f}%",
         "issueTotal": len(failed_cases) + len(blocked_cases),
         "execution": [
-            _chart_row("已通过", stats["passed"],
+            _chart_row("Passed", stats["passed"],
                        EXECUTION_STATUS_COLORS["passed"], total),
-            _chart_row("未通过", stats["failed"],
+            _chart_row("Failed", stats["failed"],
                        EXECUTION_STATUS_COLORS["failed"], total),
-            _chart_row("阻塞", stats["blocked"],
+            _chart_row("Blocked", stats["blocked"],
                        EXECUTION_STATUS_COLORS["blocked"], total),
-            _chart_row("待测试", stats["untested"],
+            _chart_row("Untested", stats["untested"],
                        EXECUTION_STATUS_COLORS["untested"], total),
         ],
         "priority": [
@@ -437,7 +437,7 @@ def _chart_row(label: str, value: int, color: str, total: int) -> dict[str, Any]
 
 def _case_table(title: str, records: list[CaseRecord]) -> str:
     rows = "\n".join(_case_row(record) for record in records)
-    body = rows if rows else '<div class="empty">暂无记录</div>'
+    body = rows if rows else '<div class="empty">No records</div>'
     return f"""
       <div class="card table-card">
         <div class="table-header">
@@ -515,14 +515,14 @@ def _stat(label: str, value: int, class_name: str) -> str:
 
 def _plan_info(run: dict[str, Any]) -> str:
     fields = [
-        ("计划ID", run.get("id")),
-        ("计划名称", run.get("name")),
-        ("计划状态", _run_status_label(run.get("status"))),
-        ("作用范围", ", ".join(run.get("scope") or [])),
-        ("测试环境", run.get("environment")),
-        ("测试人员", run.get("tester")),
-        ("开始时间", run.get("started_at")),
-        ("完成时间", run.get("completed_at")),
+        ("Plan ID", run.get("id")),
+        ("Plan Name", run.get("name")),
+        ("Status", _run_status_label(run.get("status"))),
+        ("Scope", ", ".join(run.get("scope") or [])),
+        ("Environment", run.get("environment")),
+        ("Tester", run.get("tester")),
+        ("Started At", run.get("started_at")),
+        ("Completed At", run.get("completed_at")),
     ]
     items = "\n".join(
         f"""
@@ -581,12 +581,12 @@ def _display_value(value: Any) -> str:
 
 def _run_status_label(value: Any) -> str:
     labels = {
-        "in_progress": "进行中",
-        "completed": "已完成",
-        "done": "已完成",
-        "closed": "已关闭",
-        "cancelled": "已取消",
-        "canceled": "已取消",
+        "in_progress": "In Progress",
+        "completed": "Completed",
+        "done": "Completed",
+        "closed": "Closed",
+        "cancelled": "Cancelled",
+        "canceled": "Cancelled",
     }
     text = str(value or "").strip()
     return labels.get(text.lower(), text)
