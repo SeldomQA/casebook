@@ -1,35 +1,43 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["metadata", "test_cases"],
+  "required": [
+    "metadata",
+    "test_cases"
+  ],
   "properties": {
     "metadata": {
       "type": "object",
-      "required": ["module", "feature", "owner", "last_reviewed"],
+      "required": [
+        "module",
+        "feature",
+        "owner",
+        "last_reviewed"
+      ],
       "properties": {
         "module": {
           "type": "string",
-          "description": "所属大模块"
+          "description": "Parent module"
         },
         "feature": {
           "type": "string",
-          "description": "当前文件聚焦功能"
+          "description": "Focused feature for this file"
         },
         "owner": {
           "type": "string",
-          "description": "负责人（英文名）"
+          "description": "Owner, preferably an English name"
         },
         "last_reviewed": {
           "type": "string",
           "format": "date",
-          "description": "最后评审日期（YYYY-MM-DD）"
+          "description": "Last review date (YYYY-MM-DD)"
         },
         "tags": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "全局标签"
+          "description": "File-level tags"
         }
       },
       "additionalProperties": false
@@ -51,20 +59,24 @@
           "id": {
             "type": "string",
             "pattern": "^TC_[A-Z0-9_]{3,}_[0-9]{3}$",
-            "description": "全局唯一ID，格式 TC_<功能缩写>_<三位序号>"
+            "description": "Globally unique ID, format TC_<FEATURE_PREFIX>_<NNN>"
           },
           "title": {
             "type": "string",
-            "description": "简洁动词开头的标题"
+            "description": "Concise action-oriented title"
           },
           "description": {
             "type": "string",
-            "description": "补充说明（可选）"
+            "description": "Additional description (optional)"
           },
           "priority": {
             "type": "string",
-            "enum": ["P0", "P1", "P2"],
-            "description": "优先级"
+            "enum": [
+              "P0",
+              "P1",
+              "P2"
+            ],
+            "description": "Priority"
           },
           "type": {
             "type": "string",
@@ -78,14 +90,14 @@
               "other",
               "data-consistency"
             ],
-            "description": "用例类型"
+            "description": "Case type"
           },
           "preconditions": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "执行前提（可选）"
+            "description": "Preconditions (optional)"
           },
           "steps": {
             "type": "array",
@@ -94,7 +106,7 @@
               "minLength": 1
             },
             "minItems": 1,
-            "description": "操作步骤（每步一句话）"
+            "description": "Execution steps, one action per item"
           },
           "expected_results": {
             "type": "array",
@@ -103,19 +115,19 @@
               "minLength": 1
             },
             "minItems": 1,
-            "description": "预期结果（可多条）"
+            "description": "Expected results, one or more items"
           },
           "tags": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "用例级标签"
+            "description": "Case-level tags"
           },
           "auto": {
             "type": "boolean",
             "default": false,
-            "description": "是否计划自动化（默认 false）"
+            "description": "Whether the case is planned for automation (default false)"
           }
         },
         "additionalProperties": false
