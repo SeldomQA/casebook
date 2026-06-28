@@ -922,7 +922,7 @@ body.resizing-sidebar .app-shell {
 
 .case-table-head {
   display: grid;
-  grid-template-columns: 24px minmax(150px, 210px) minmax(260px, 1fr) 70px 92px minmax(160px, 0.65fr) minmax(210px, 240px);
+  grid-template-columns: 24px minmax(128px, 170px) minmax(280px, 1fr) 86px 92px minmax(180px, 0.7fr) minmax(128px, 148px);
   gap: 12px;
   align-items: center;
   padding: 9px 16px;
@@ -955,7 +955,7 @@ body.resizing-sidebar .app-shell {
 
 .case-summary {
   display: grid;
-  grid-template-columns: 24px minmax(150px, 210px) minmax(260px, 1fr) 70px 92px minmax(160px, 0.65fr) minmax(210px, 240px);
+  grid-template-columns: 24px minmax(128px, 170px) minmax(280px, 1fr) 86px 92px minmax(180px, 0.7fr) minmax(128px, 148px);
   gap: 12px;
   align-items: flex-start;
   min-height: 54px;
@@ -1100,10 +1100,25 @@ body.resizing-sidebar .app-shell {
 }
 
 .chevron-button {
-  position: relative;
+  display: inline-grid;
+  place-items: center;
   width: 24px;
   height: 24px;
+  border-radius: 4px;
   padding: 0;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.chevron-icon {
+  display: block;
+  transform-origin: center;
+  transition: transform 0.16s ease, color 0.16s ease;
+}
+
+.case-item.expanded .chevron-icon {
+  color: var(--primary);
+  transform: rotate(90deg);
 }
 
 .text-action {
@@ -1135,24 +1150,6 @@ body.resizing-sidebar .app-shell {
   background: #f8fafc;
   color: var(--muted-2);
   cursor: not-allowed;
-}
-
-.chevron-button::before {
-  content: "";
-  position: absolute;
-  top: 9px;
-  left: 9px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--primary);
-  border-bottom: 2px solid var(--primary);
-  transform: rotate(45deg);
-  transition: transform 0.16s ease;
-}
-
-.case-item.expanded .chevron-button::before {
-  top: 11px;
-  transform: rotate(225deg);
 }
 
 .case-details {
@@ -1482,7 +1479,7 @@ body.resizing-sidebar .app-shell {
 
   .case-table-head,
   .case-summary {
-    grid-template-columns: 24px minmax(140px, 180px) minmax(220px, 1fr) 62px 84px minmax(140px, 0.6fr) minmax(200px, 230px);
+    grid-template-columns: 24px minmax(120px, 150px) minmax(240px, 1fr) 76px 84px minmax(150px, 0.6fr) minmax(128px, 140px);
     gap: 10px;
   }
 }
@@ -1534,7 +1531,7 @@ body.resizing-sidebar .app-shell {
   }
 
   .case-summary {
-    grid-template-columns: 24px 140px minmax(0, 1fr) minmax(180px, 220px);
+    grid-template-columns: 24px 128px minmax(0, 1fr) minmax(180px, 220px);
     gap: 8px 12px;
   }
 

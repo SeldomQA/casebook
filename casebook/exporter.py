@@ -212,14 +212,27 @@ def render_export_html(data: dict[str, Any]) -> str:
       font-weight: 800;
     }}
     .file-count {{ align-self: start; color: var(--muted); font-weight: 900; }}
+    .case-table-head,
+    .case-summary {{
+      display: grid;
+      grid-template-columns: 24px minmax(128px, 170px) minmax(280px, 1fr) 86px 92px minmax(180px, .7fr) minmax(128px, 148px);
+      gap: 12px;
+      align-items: flex-start;
+    }}
+    .case-table-head {{
+      border-bottom: 1px solid var(--line-soft);
+      background: #fbfcfe;
+      color: #6b7a90;
+      padding: 10px 16px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }}
     .case-list {{ display: grid; gap: 0; }}
     .case-card {{ border-bottom: 1px solid var(--line-soft); }}
     .case-card:last-child {{ border-bottom: 0; }}
     .case-summary {{
-      display: grid;
-      grid-template-columns: 32px minmax(150px, 210px) minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: center;
       width: 100%;
       border: 0;
       background: transparent;
@@ -228,6 +241,13 @@ def render_export_html(data: dict[str, Any]) -> str:
       text-align: left;
     }}
     .case-summary:hover {{ background: #fbfcfe; }}
+    .case-main-cell,
+    .case-tags-cell {{ min-width: 0; }}
+    .case-id-cell,
+    .case-priority-cell,
+    .case-type-cell,
+    .case-tags-cell,
+    .case-actions-cell {{ padding-top: 2px; }}
     .toggle {{
       width: 24px;
       height: 24px;
@@ -238,15 +258,59 @@ def render_export_html(data: dict[str, Any]) -> str:
       font-weight: 900;
     }}
     .case-card.open .toggle {{ color: var(--primary); transform: rotate(90deg); }}
-    .case-id {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 900; color: #0759b8; }}
-    .case-title {{ min-width: 0; font-size: 15px; font-weight: 900; }}
-    .case-description {{ margin: 5px 0 0; color: var(--muted); line-height: 1.45; }}
-    .badges {{ display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }}
-    .badge {{ border-radius: 4px; padding: 3px 7px; font-size: 12px; font-weight: 900; }}
+    .case-id {{
+      display: inline-block;
+      border-radius: 4px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      font-weight: 900;
+      padding: 2px 6px;
+      white-space: nowrap;
+    }}
+    .case-title-line {{ display: flex; align-items: center; gap: 8px; min-width: 0; }}
+    .case-title {{ min-width: 0; color: #263244; font-size: 13px; font-weight: 900; line-height: 1.35; }}
+    .case-description {{ display: block; margin: 3px 0 0; color: #8fa0b8; font-size: 12px; line-height: 1.45; }}
+    .auto-pill {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 18px;
+      border-radius: 999px;
+      background: var(--mark-soft);
+      color: var(--mark);
+      font-size: 12px;
+      font-weight: 900;
+      padding: 1px 8px;
+      white-space: nowrap;
+    }}
+    .badge {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 22px;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 900;
+    }}
     .priority-p0 {{ color: var(--p0); background: var(--p0-soft); }}
     .priority-p1 {{ color: #9a6500; background: var(--p1-soft); }}
     .priority-p2 {{ color: var(--p2); background: var(--p2-soft); }}
-    .tag {{ background: var(--primary-soft); color: #245ca8; }}
+    .case-type-cell {{ color: #637089; font-size: 12px; }}
+    .tag-list {{ display: flex; flex-wrap: wrap; gap: 5px; }}
+    .tag {{
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: #245ca8;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      white-space: nowrap;
+    }}
+    .case-actions-cell {{ display: flex; justify-content: flex-end; }}
+    .case-action-text {{ color: var(--primary); font-size: 13px; font-weight: 900; }}
     .case-body {{
       display: none;
       grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
@@ -314,11 +378,24 @@ def render_export_html(data: dict[str, Any]) -> str:
     }}
     .mark-tag {{ color: var(--mark); background: var(--mark-soft); }}
     .empty {{ padding: 32px 18px; color: var(--muted); text-align: center; font-weight: 800; }}
+    @media (max-width: 1280px) {{
+      .case-table-head,
+      .case-summary {{
+        grid-template-columns: 24px minmax(120px, 150px) minmax(240px, 1fr) 76px 84px minmax(150px, .6fr) minmax(128px, 140px);
+        gap: 10px;
+      }}
+    }}
     @media (max-width: 860px) {{
       .hero, .file-header, .case-body {{ grid-template-columns: 1fr; }}
+      .case-table-head {{ display: none; }}
       .stats {{ justify-content: flex-start; }}
-      .case-summary {{ grid-template-columns: 24px minmax(120px, 1fr); }}
-      .case-title, .badges {{ grid-column: 2; justify-content: flex-start; }}
+      .case-summary {{ grid-template-columns: 24px minmax(120px, 1fr); gap: 8px 12px; }}
+      .case-id-cell,
+      .case-main-cell,
+      .case-priority-cell,
+      .case-type-cell,
+      .case-tags-cell,
+      .case-actions-cell {{ grid-column: 2; justify-content: flex-start; }}
       .case-body {{ padding-left: 16px; }}
       .detail-grid {{ grid-template-columns: 1fr; }}
     }}
@@ -480,6 +557,15 @@ def render_export_html(data: dict[str, Any]) -> str:
             </div>
             <div class="file-count">${{file.cases.length}} cases</div>
           </header>
+          <div class="case-table-head" aria-hidden="true">
+            <span></span>
+            <span>ID</span>
+            <span>Title</span>
+            <span>Priority</span>
+            <span>Type</span>
+            <span>Tags</span>
+            <span>Actions</span>
+          </div>
           <div class="case-list">${{file.cases.map((caseItem) => renderCase(file, caseItem)).join("")}}</div>
         </article>`;
     }}
@@ -490,24 +576,27 @@ def render_export_html(data: dict[str, Any]) -> str:
       const open = state.open.has(key);
       const marked = Boolean(review.marked);
       const tags = [
-        ...caseItem.tags.map((tag) => `<span class="badge tag">${{escapeHtml(tag)}}</span>`),
-        marked ? '<span class="badge mark-tag">Mark</span>' : "",
+        ...caseItem.tags.map((tag) => `<span class="tag">${{escapeHtml(tag)}}</span>`),
+        marked ? '<span class="tag mark-tag">Mark</span>' : "",
       ].join("");
       return `
         <article class="case-card ${{open ? "open" : ""}}" data-case-key="${{escapeAttr(key)}}">
           <button class="case-summary" type="button" data-case-summary data-case-key="${{escapeAttr(key)}}">
             <span class="toggle">›</span>
-            <span class="case-id">${{escapeHtml(caseItem.id)}}</span>
-            <span>
-              <span class="case-title">${{escapeHtml(caseItem.title)}}</span>
-              ${{caseItem.description ? `<p class="case-description">${{escapeHtml(caseItem.description)}}</p>` : ""}}
+            <span class="case-id-cell"><span class="case-id">${{escapeHtml(caseItem.id)}}</span></span>
+            <span class="case-main-cell">
+              <span class="case-title-line">
+                <span class="case-title">${{escapeHtml(caseItem.title)}}</span>
+                ${{caseItem.auto ? '<span class="auto-pill">Auto</span>' : ""}}
+              </span>
+              ${{caseItem.description ? `<span class="case-description">${{escapeHtml(caseItem.description)}}</span>` : ""}}
             </span>
-            <span class="badges">
+            <span class="case-priority-cell">
               <span class="badge priority-${{escapeAttr(caseItem.priority.toLowerCase())}}">${{escapeHtml(caseItem.priority)}}</span>
-              <span class="badge">${{escapeHtml(caseItem.type)}}</span>
-              ${{caseItem.auto ? '<span class="badge">Auto</span>' : ""}}
-              ${{tags}}
             </span>
+            <span class="case-type-cell">${{escapeHtml(caseItem.type)}}</span>
+            <span class="case-tags-cell"><span class="tag-list">${{tags}}</span></span>
+            <span class="case-actions-cell"><span class="case-action-text">Review</span></span>
           </button>
           <div class="case-body">
             <div class="detail-grid">

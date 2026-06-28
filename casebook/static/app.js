@@ -631,7 +631,9 @@ function renderCaseRows() {
         <article class="case-item${selected ? " selected" : ""}${expanded ? " expanded" : ""} exec-${escapeAttr(execStatus)}" data-case-id="${escapeAttr(caseItem.id)}">
           <div class="case-summary" data-case-summary data-case-id="${escapeAttr(caseItem.id)}">
             <div class="case-toggle-cell">
-              <button class="chevron-button" type="button" data-toggle-case="1" data-case-id="${escapeAttr(caseItem.id)}" aria-expanded="${expanded}" aria-label="${expanded ? "Collapse case details" : "Expand case details"}"></button>
+              <button class="chevron-button" type="button" data-toggle-case="1" data-case-id="${escapeAttr(caseItem.id)}" aria-expanded="${expanded}" aria-label="${expanded ? "Collapse case details" : "Expand case details"}">
+                <span class="chevron-icon" aria-hidden="true">›</span>
+              </button>
             </div>
             <div class="case-id-cell">
               <span class="case-id">${escapeHtml(caseItem.id)}</span>
