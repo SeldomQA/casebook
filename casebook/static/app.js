@@ -123,6 +123,12 @@ function bindEvents() {
     renderCaseRows();
   });
   els.caseRows.addEventListener("change", (event) => {
+    const reviewMarkCheckbox = event.target.closest("input[data-review-mark]");
+    if (reviewMarkCheckbox) {
+      event.stopPropagation();
+      updateReviewMark(reviewMarkCheckbox.dataset.caseId, reviewMarkCheckbox.checked);
+      return;
+    }
     const executionSelect = event.target.closest("select[data-exec-select]");
     if (!executionSelect) return;
     event.stopPropagation();
@@ -140,10 +146,10 @@ function bindEvents() {
       saveExecutionDetails(saveExecutionButton.dataset.caseId);
       return;
     }
-    const markButton = event.target.closest("button[data-mark]");
-    if (markButton) {
+    const saveReviewButton = event.target.closest("button[data-save-review]");
+    if (saveReviewButton) {
       event.stopPropagation();
-      toggleNeedsUpdate(markButton.dataset.caseId);
+      saveReviewDetails(saveReviewButton.dataset.caseId);
       return;
     }
     const editButton = event.target.closest("button[data-edit-case]");
@@ -609,16 +615,20 @@ function renderCaseRows() {
     .filter(matchesCurrentFilter)
     .map((caseItem) => {
       const key = markKey(state.currentData.path, caseItem.id);
-      const marked = Boolean(state.marks[key] && state.marks[key].needs_update);
+      const mark = reviewMark(caseItem.id);
+      const marked = Boolean(mark.needs_update);
       const selected = state.selectedCaseId === caseItem.id;
       const expanded = state.expandedCaseIds.has(caseItem.id);
       const execStatus = executionStatus(caseItem.id);
-      const tags = (caseItem.tags || []).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+      const tags = [
+        ...(caseItem.tags || []).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`),
+        marked ? `<span class="tag mark-tag">Mark</span>` : "",
+      ].join("");
       const description = caseItem.description
         ? `<p class="case-description">${escapeHtml(caseItem.description)}</p>`
         : "";
       return `
-        <article class="case-item${marked ? " needs-update" : ""}${selected ? " selected" : ""}${expanded ? " expanded" : ""} exec-${escapeAttr(execStatus)}" data-case-id="${escapeAttr(caseItem.id)}">
+        <article class="case-item${selected ? " selected" : ""}${expanded ? " expanded" : ""} exec-${escapeAttr(execStatus)}" data-case-id="${escapeAttr(caseItem.id)}">
           <div class="case-summary" data-case-summary data-case-id="${escapeAttr(caseItem.id)}">
             <div class="case-toggle-cell">
               <button class="chevron-button" type="button" data-toggle-case="1" data-case-id="${escapeAttr(caseItem.id)}" aria-expanded="${expanded}" aria-label="${expanded ? "Collapse case details" : "Expand case details"}"></button>
@@ -640,7 +650,6 @@ function renderCaseRows() {
             <div class="case-tags-cell"><div class="tag-list">${tags}</div></div>
             <div class="case-actions">
               ${state.currentRun ? renderExecutionActions(caseItem.id, execStatus) : ""}
-              <button class="mark-action${marked ? " active" : ""}" type="button" data-mark="1" data-case-id="${escapeAttr(caseItem.id)}">${marked ? "Marked" : "Mark"}</button>
               <button class="text-action" type="button" data-edit-case="1" data-case-id="${escapeAttr(caseItem.id)}">Edit</button>
             </div>
           </div>
@@ -661,8 +670,11 @@ function renderCaseDetails(caseItem) {
         </div>
         <div class="case-detail-column">
           ${renderDetailList("Expected Results", caseItem.expected_results, false)}
-          ${state.currentRun ? renderExecutionDetails(caseItem) : ""}
         </div>
+      </div>
+      <div class="case-side-panel">
+        ${renderReviewDetails(caseItem)}
+        ${state.currentRun ? renderExecutionDetails(caseItem) : ""}
       </div>
     </div>`;
 }
@@ -683,6 +695,20 @@ function renderExecutionActions(caseId, currentStatus) {
         `).join("")}
       </select>
     </div>`;
+}
+
+function renderReviewDetails(caseItem) {
+  const mark = reviewMark(caseItem.id);
+  const marked = Boolean(mark.needs_update);
+  return `
+    <aside class="review-panel">
+      <label class="mark-row">
+        <input type="checkbox" data-review-mark="1" data-case-id="${escapeAttr(caseItem.id)}"${marked ? " checked" : ""}>
+        <span>Needs update</span>
+      </label>
+      <textarea data-review-notes="${escapeAttr(caseItem.id)}" rows="5" placeholder="Describe what should be updated">${escapeHtml(mark.notes || "")}</textarea>
+      <button class="outline-button review-save-button" type="button" data-save-review="1" data-case-id="${escapeAttr(caseItem.id)}">Save review</button>
+    </aside>`;
 }
 
 function renderExecutionDetails(caseItem) {
@@ -869,15 +895,40 @@ async function renumberCurrentFile() {
   }
 }
 
-async function toggleNeedsUpdate(caseId) {
+async function updateReviewMark(caseId, needsUpdate) {
   if (!state.currentData || !caseId) return;
-  const result = await api("/api/marks/toggle", {
-    method: "POST",
-    body: JSON.stringify({ file_path: state.currentData.path, case_id: caseId }),
+  const notes = document.querySelector(`[data-review-notes="${cssEscape(caseId)}"]`)?.value || "";
+  const result = await api("/api/marks", {
+    method: "PATCH",
+    body: JSON.stringify({
+      file_path: state.currentData.path,
+      case_id: caseId,
+      needs_update: needsUpdate,
+      notes,
+    }),
   });
   state.marks = result.marks || state.marks;
   renderFilters();
   renderCaseRows();
+}
+
+async function saveReviewDetails(caseId) {
+  if (!state.currentData || !caseId) return;
+  const marked = document.querySelector(`[data-review-mark][data-case-id="${cssEscape(caseId)}"]`)?.checked || false;
+  const notes = document.querySelector(`[data-review-notes="${cssEscape(caseId)}"]`)?.value || "";
+  const result = await api("/api/marks", {
+    method: "PATCH",
+    body: JSON.stringify({
+      file_path: state.currentData.path,
+      case_id: caseId,
+      needs_update: marked,
+      notes,
+    }),
+  });
+  state.marks = result.marks || state.marks;
+  renderFilters();
+  renderCaseRows();
+  showToast("Review details saved");
 }
 
 async function selectRun(runId) {
@@ -1004,9 +1055,7 @@ function findCase(caseId) {
 }
 
 function isMarked(caseId) {
-  if (!state.currentData) return false;
-  const mark = state.marks[markKey(state.currentData.path, caseId)];
-  return Boolean(mark && mark.needs_update);
+  return Boolean(reviewMark(caseId).needs_update);
 }
 
 function countNeedsUpdate() {
@@ -1016,6 +1065,12 @@ function countNeedsUpdate() {
 
 function markKey(filePath, caseId) {
   return `${filePath}#${caseId}`;
+}
+
+function reviewMark(caseId) {
+  if (!state.currentData || !caseId) return {};
+  const mark = state.marks[markKey(state.currentData.path, caseId)];
+  return mark && typeof mark === "object" ? mark : {};
 }
 
 function markActiveTreeItem() {

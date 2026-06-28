@@ -36,22 +36,39 @@ class MarksStore:
     def key(self, file_path: str, case_id: str) -> str:
         return f"{file_path}#{case_id}"
 
+    def update_mark(
+        self,
+        file_path: str,
+        case_id: str,
+        needs_update: bool | None = None,
+        notes: str | None = None,
+    ) -> dict[str, Any]:
+        with self._lock:
+            marks = self._load()
+            key = self.key(file_path, case_id)
+            current = marks.get(key)
+            mark = current if isinstance(current, dict) else {}
+            if needs_update is not None:
+                mark["needs_update"] = bool(needs_update)
+            if notes is not None:
+                mark["notes"] = notes
+            if mark.get("needs_update") or str(mark.get("notes") or "").strip():
+                mark["updated_at"] = datetime.now(timezone.utc).isoformat()
+                marks[key] = mark
+                marked = bool(mark.get("needs_update"))
+            else:
+                marks.pop(key, None)
+                marked = False
+            self._save(marks)
+            return {"key": key, "mark": marks.get(key), "marked": marked, "marks": marks}
+
     def toggle_needs_update(self, file_path: str, case_id: str) -> dict[str, Any]:
         with self._lock:
             marks = self._load()
             key = self.key(file_path, case_id)
             current = marks.get(key)
-            if current and current.get("needs_update"):
-                marks.pop(key, None)
-                marked = False
-            else:
-                marks[key] = {
-                    "needs_update": True,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-                marked = True
-            self._save(marks)
-            return {"key": key, "marked": marked, "marks": marks}
+            marked = not bool(isinstance(current, dict) and current.get("needs_update"))
+        return self.update_mark(file_path, case_id, needs_update=marked)
 
     def remap_case_ids(self, file_path: str, mapping: list[dict[str, Any]]) -> dict[str, Any]:
         id_map = {

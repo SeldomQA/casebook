@@ -312,8 +312,7 @@ def render_export_html(data: dict[str, Any]) -> str:
       padding: 9px 10px;
       color: var(--text);
     }}
-    .marked .case-summary {{ background: var(--mark-soft); }}
-    .marked .case-id {{ color: var(--mark); }}
+    .mark-tag {{ color: var(--mark); background: var(--mark-soft); }}
     .empty {{ padding: 32px 18px; color: var(--muted); text-align: center; font-weight: 800; }}
     @media (max-width: 860px) {{
       .hero, .file-header, .case-body {{ grid-template-columns: 1fr; }}
@@ -490,9 +489,12 @@ def render_export_html(data: dict[str, Any]) -> str:
       const review = reviewItem(key);
       const open = state.open.has(key);
       const marked = Boolean(review.marked);
-      const tags = [...caseItem.tags].map((tag) => `<span class="badge tag">${{escapeHtml(tag)}}</span>`).join("");
+      const tags = [
+        ...caseItem.tags.map((tag) => `<span class="badge tag">${{escapeHtml(tag)}}</span>`),
+        marked ? '<span class="badge mark-tag">Mark</span>' : "",
+      ].join("");
       return `
-        <article class="case-card ${{open ? "open" : ""}} ${{marked ? "marked" : ""}}" data-case-key="${{escapeAttr(key)}}">
+        <article class="case-card ${{open ? "open" : ""}}" data-case-key="${{escapeAttr(key)}}">
           <button class="case-summary" type="button" data-case-summary data-case-key="${{escapeAttr(key)}}">
             <span class="toggle">›</span>
             <span class="case-id">${{escapeHtml(caseItem.id)}}</span>
@@ -522,7 +524,7 @@ def render_export_html(data: dict[str, Any]) -> str:
                 <input type="checkbox" data-review-mark="${{escapeAttr(key)}}" ${{marked ? "checked" : ""}}>
                 <span>Needs update</span>
               </label>
-              <textarea data-review-notes="${{escapeAttr(key)}}" placeholder="Review notes">${{escapeHtml(review.notes)}}</textarea>
+              <textarea data-review-notes="${{escapeAttr(key)}}" placeholder="Describe what should be updated">${{escapeHtml(review.notes)}}</textarea>
             </aside>
           </div>
         </article>`;

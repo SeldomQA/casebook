@@ -102,12 +102,18 @@ def create_app(
         if not entry:
             return jsonify({"error": f"File not found: {file_path}"}), 404
         all_marks = marks.all()
-        entry["marks"] = {
-            f"{file_path}#{case['id']}": all_marks.get(f"{file_path}#{case['id']}")
-            for case in entry["cases"]
-            if all_marks.get(f"{file_path}#{case['id']}")
-        }
-        entry["needs_update_count"] = len(entry["marks"])
+        file_marks = {}
+        for case in entry["cases"]:
+            key = f"{file_path}#{case['id']}"
+            mark = all_marks.get(key)
+            if mark:
+                file_marks[key] = mark
+        entry["marks"] = file_marks
+        entry["needs_update_count"] = sum(
+            1
+            for mark in file_marks.values()
+            if isinstance(mark, dict) and mark.get("needs_update")
+        )
         return jsonify(entry)
 
     @app.post("/api/files/<path:file_path>/renumber")
@@ -153,6 +159,36 @@ def create_app(
         if not file_path or not case_id:
             return jsonify({"error": "Missing file_path or case_id"}), 400
         result = marks.toggle_needs_update(file_path, case_id)
+        broker.publish({
+            "type": "marks",
+            "file_path": file_path,
+            "case_id": case_id,
+            "marked": result["marked"],
+        })
+        return jsonify(result)
+
+    @app.patch("/api/marks")
+    def api_update_mark():
+        payload = request.get_json(silent=True) or {}
+        file_path = str(payload.get("file_path")
+                        or payload.get("filePath") or "")
+        case_id = str(payload.get("case_id") or payload.get("caseId") or "")
+        if not file_path or not case_id:
+            return jsonify({"error": "Missing file_path or case_id"}), 400
+        needs_update = (
+            payload.get("needs_update")
+            if "needs_update" in payload
+            else payload.get("needsUpdate")
+        )
+        notes = payload.get("notes") if "notes" in payload else None
+        if needs_update is None and notes is None:
+            return jsonify({"error": "Missing needs_update or notes"}), 400
+        result = marks.update_mark(
+            file_path=file_path,
+            case_id=case_id,
+            needs_update=needs_update if needs_update is None else bool(needs_update),
+            notes=notes,
+        )
         broker.publish({
             "type": "marks",
             "file_path": file_path,
