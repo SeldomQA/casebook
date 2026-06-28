@@ -244,6 +244,53 @@ def report(
     typer.echo(f"Generated report: {target}")
 
 
+@app.command("export", help="Export YAML test cases to a standalone review HTML file.")
+def export_cases(
+    source: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=True,
+            readable=True,
+            help="YAML file or directory to export.",
+        ),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Output HTML path."),
+    ] = None,
+    tag: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--tag",
+            help="Export only cases with this tag. Repeat or use comma-separated values.",
+        ),
+    ] = None,
+    priority: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--priority",
+            help="Export only cases with this priority. Repeat or use comma-separated values.",
+        ),
+    ] = None,
+) -> None:
+    from .exporter import ExportError, generate_export
+
+    try:
+        target = generate_export(
+            source,
+            output_file=output,
+            tags=tag,
+            priorities=priority,
+            project_root=Path.cwd(),
+        )
+    except ExportError as exc:
+        typer.echo(f"casebook export: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"Exported review HTML: {target}")
+
+
 @app.command(help="Renumber test case IDs in one YAML file.")
 def renumber(
     yaml_file: Annotated[
