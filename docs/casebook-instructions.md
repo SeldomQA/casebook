@@ -1,6 +1,6 @@
 # Casebook 使用说明
 
-本文档承接 README 中不适合展开太长的使用细节，覆盖 AI Agent 生成用例、测试计划、项目状态文件和 HTML 测试报告。
+本文档承接 README 中不适合展开太长的使用细节，覆盖 AI Agent 生成用例、用例 ID 重排、静态 HTML 用例导出、测试计划、项目状态文件和 HTML 测试报告。
 
 ## 使用 AI Agent 生成用例
 
@@ -69,6 +69,87 @@ AI Agent 完成修改后，建议做一次检查：
 
 Casebook 的核心思路是：AI Agent 负责生成和维护 YAML，人负责评审、判断和执行。这样测试用例不再是散落在平台里的表格，而是可被 AI 理解、可被 schema 校验、可被 Git 管理的工程资产。
 
+## 用例 ID 重排
+
+用例评审阶段经常会删除、插入或调整用例。Casebook 推荐保持 YAML 中的用例顺序不变，只按当前文件顺序重新整理用例 ID。
+
+重排范围是当前 YAML 文件，不会跨文件处理。重排规则是以第一条用例 ID 为起点，例如第一条是 `TC_LOGIN_018`，后续用例会依次变成 `TC_LOGIN_019`、`TC_LOGIN_020`。
+
+命令行重排：
+
+```bash
+casebook renumber releases/example/login.yaml
+```
+
+本地工作台重排：
+
+- 打开某个 YAML 文件。
+- 确认当前没有选择测试计划。
+- 点击用例列表上方的 `ID 更新`。
+
+测试计划模式下不支持 ID 重排。测试计划的执行结果以 `文件路径#用例ID` 记录，重排会导致执行结果和用例错位，因此页面会在选择测试计划后禁用 `ID 更新`。
+
+重排时，当前文件里的 Mark 标记会按旧 ID 到新 ID 自动迁移，避免评审标记丢失。
+
+## 静态 HTML 用例导出
+
+`casebook serve` 适合本机评审和执行，但会议室电脑、开发冒烟用例交付、离线分享等场景更适合直接打开一个静态 HTML 文件。
+
+导出整个需求或版本目录：
+
+```bash
+casebook export releases/v1-auth
+```
+
+目录会默认聚合为一个 HTML 文件，命名规则类似：
+
+```text
+releases/v1-auth -> casebook-v1-auth.html
+```
+
+导出单个 YAML 文件：
+
+```bash
+casebook export releases/v1-auth/login.yaml
+```
+
+单个 YAML 默认输出同名 HTML：
+
+```text
+releases/v1-auth/login.yaml -> releases/v1-auth/login.html
+```
+
+指定输出位置：
+
+```bash
+casebook export releases/v1-auth --output login-review.html
+```
+
+按标签或优先级导出部分用例：
+
+```bash
+casebook export releases/v1-auth --tag smoke
+casebook export releases/v1-auth --priority P0
+casebook export releases/v1-auth --tag smoke --priority P0
+```
+
+`--tag` 和 `--priority` 都可以重复传入，也支持逗号分隔：
+
+```bash
+casebook export releases/v1-auth --tag smoke --tag api
+casebook export releases/v1-auth --priority P0,P1
+```
+
+导出的 HTML 是偏评审视图的只读用例包，包含：
+
+- 文件元信息、用例数量和优先级统计。
+- 用例 ID、标题、描述、优先级、类型和标签。
+- 前置条件、步骤和预期结果。
+- 页面内搜索、优先级筛选、标签筛选、展开/收起。
+- 每条用例的 `Needs update` 标记和评审备注。
+
+导出的 HTML 不读取项目中的 `.casebook/marks.json`，因此不会把本地工作台的 Mark 状态带出去。HTML 中的评审标记和备注保存在浏览器 localStorage 中，适合会议室电脑临时评审；评审结束后可以点击 `Export review notes` 下载 JSON，把备注带回项目继续处理。
+
 ## 测试计划与用例执行
 
 Casebook 将执行数据保存在独立文件中，不写入 YAML 用例定义。
@@ -87,7 +168,7 @@ casebook serve releases/v1-auth
 
 此时创建的测试计划只属于 `releases/v1-auth`，不会混入其他需求目录的计划。
 
-每个测试计划会记录名称、范围、开始时间、完成时间和每条用例的执行结果。执行过程中，最近一次执行或备注更新时间会写入 `completed_at`；完成计划时，测试环境默认是 `测试环境`，测试人员默认来自当前启动范围内 YAML 文件的 `owner`，多个 owner 使用逗号分隔。
+每个测试计划会记录名称、范围、开始时间、完成时间和每条用例的执行结果。执行过程中，最近一次执行、备注或缺陷链接更新时间会写入 `completed_at`；完成计划时，测试环境默认是 `Test environment`，测试人员默认来自当前启动范围内 YAML 文件的 `owner`，多个 owner 使用逗号分隔。
 
 用例结果以 `文件路径#用例ID` 作为 key：
 
@@ -95,10 +176,10 @@ casebook serve releases/v1-auth
 {
   "run": {
     "id": "run-20260625093000-login-smoke",
-    "name": "登录冒烟测试",
+    "name": "Login smoke test",
     "status": "completed",
     "scope": ["releases/v1-auth"],
-    "environment": "测试环境",
+    "environment": "Test environment",
     "tester": "qa",
     "started_at": "2026-06-25T01:30:00+00:00",
     "completed_at": "2026-06-25T02:30:00+00:00"
@@ -106,7 +187,8 @@ casebook serve releases/v1-auth
   "results": {
     "releases/v1-auth/login.yaml#TC_LOGIN_001": {
       "status": "passed",
-      "notes": "验证通过",
+      "notes": "Passed",
+      "defects": [],
       "executed_at": "2026-06-25T01:35:00+00:00"
     }
   }
@@ -179,7 +261,7 @@ casebook report test-runs/run-20260625093000-login-smoke.json --output reports/l
 - 测试计划基本信息：ID、名称、状态、范围、测试环境、测试人员、开始时间和完成时间。
 - 执行概览：用例总数、已执行、已通过、失败、阻塞、待测试。
 - ECharts 环形图：执行状态分布、失败/阻塞优先级分布。
-- 失败用例列表。
-- 阻塞用例列表。
+- 失败用例列表，包含执行备注和缺陷链接。
+- 阻塞用例列表，包含执行备注和缺陷链接。
 
 报告 HTML 通过 CDN 引入 ECharts 渲染图表；即使图表脚本未加载，报告中的概览数字和用例列表仍然可以直接查看。
