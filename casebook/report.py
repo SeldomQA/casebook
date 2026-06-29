@@ -77,7 +77,8 @@ def build_report_data(run_data: dict[str, Any], project_root: Path) -> dict[str,
         results = {}
 
     scope = _normalize_scope(run.get("scope"))
-    case_records = _collect_case_records(project_root, scope, results)
+    case_scope = _normalize_case_scope(run.get("case_scope"))
+    case_records = _collect_case_records(project_root, scope, results, case_scope)
     stats = _build_stats(case_records)
     failed_cases = [
         record for record in case_records if record.status == "failed"]
@@ -91,6 +92,9 @@ def build_report_data(run_data: dict[str, Any], project_root: Path) -> dict[str,
             "id": str(run.get("id") or ""),
             "name": str(run.get("name") or run.get("id") or "Test Plan"),
             "status": str(run.get("status") or ""),
+            "mode": str(run.get("mode") or "full"),
+            "source_run_id": str(run.get("source_run_id") or ""),
+            "case_total": len(case_scope) if case_scope is not None else len(case_records),
             "scope": scope,
             "environment": str(run.get("environment") or ""),
             "tester": str(run.get("tester") or ""),
@@ -319,24 +323,30 @@ def _collect_case_records(
     project_root: Path,
     scope: list[str],
     results: dict[str, Any],
+    case_scope: list[str] | None = None,
 ) -> list[CaseRecord]:
     store = CasebookStore(project_root=project_root, scan_dirs=scope or None)
     store.refresh()
 
     records: list[CaseRecord] = []
     seen_keys: set[str] = set()
+    case_scope_set = set(case_scope) if case_scope is not None else None
     for file_meta in store.list_files():
         entry = store.get_file(file_meta["path"])
         if not entry:
             continue
         for case in entry["cases"]:
             key = f"{entry['path']}#{case['id']}"
+            if case_scope_set is not None and key not in case_scope_set:
+                continue
             seen_keys.add(key)
             result = results.get(key) if isinstance(
                 results.get(key), dict) else {}
             records.append(_record_from_case(entry["path"], case, key, result))
 
     for key, result in results.items():
+        if case_scope_set is not None and key not in case_scope_set:
+            continue
         if key in seen_keys or not isinstance(result, dict):
             continue
         file_path, case_id = _split_result_key(str(key))
@@ -525,6 +535,9 @@ def _plan_info(run: dict[str, Any]) -> str:
         ("Plan ID", run.get("id")),
         ("Plan Name", run.get("name")),
         ("Status", _run_status_label(run.get("status"))),
+        ("Mode", _run_mode_label(run.get("mode"))),
+        ("Source Plan", run.get("source_run_id")),
+        ("Case Scope", run.get("case_total")),
         ("Scope", ", ".join(run.get("scope") or [])),
         ("Environment", run.get("environment")),
         ("Tester", run.get("tester")),
@@ -565,6 +578,12 @@ def _normalize_scope(scope: Any) -> list[str]:
     return [str(item).strip().rstrip("/\\") for item in scope if str(item).strip()]
 
 
+def _normalize_case_scope(case_scope: Any) -> list[str] | None:
+    if not isinstance(case_scope, list):
+        return None
+    return [str(item or "").strip() for item in case_scope if str(item or "").strip()]
+
+
 def _normalize_status(status: Any) -> str:
     value = str(status or "").strip().lower()
     return value if value in {"passed", "failed", "blocked", "deferred"} else "untested"
@@ -596,4 +615,13 @@ def _run_status_label(value: Any) -> str:
         "canceled": "Cancelled",
     }
     text = str(value or "").strip()
+    return labels.get(text.lower(), text)
+
+
+def _run_mode_label(value: Any) -> str:
+    labels = {
+        "full": "Full run",
+        "retest_unresolved": "Retest failed/blocked/deferred",
+    }
+    text = str(value or "full").strip()
     return labels.get(text.lower(), text)

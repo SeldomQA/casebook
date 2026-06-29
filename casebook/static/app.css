@@ -448,23 +448,35 @@ body.resizing-sidebar .app-shell {
 .test-plan-summary {
   display: grid;
   width: 100%;
-  grid-template-columns: minmax(0, 1fr) auto auto 18px;
+  grid-template-columns: auto minmax(220px, 300px) minmax(0, 1fr) auto 18px;
   gap: 14px;
   align-items: center;
-  border: 0;
-  background: transparent;
   color: var(--text);
   padding: 10px 14px;
   text-align: left;
-  cursor: pointer;
 }
 
-.test-plan-summary h3 {
+.test-plan-title {
+  min-width: 0;
+}
+
+.test-plan-title h3 {
   margin: 0;
   color: #263244;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.2;
+}
+
+.test-plan-select {
+  width: 100%;
+  height: 30px;
+  min-width: 0;
+  border: 1px solid #bdbdbd;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 10px;
 }
 
 .test-plan-summary strong {
@@ -482,6 +494,16 @@ body.resizing-sidebar .app-shell {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.test-plan-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .test-plan-caret {
@@ -548,15 +570,23 @@ body.resizing-sidebar .app-shell {
 }
 
 .execution-controls select {
-  min-width: 220px;
+  min-width: 180px;
+}
+
+#runModeSelect {
+  min-width: 230px;
+}
+
+#sourceRunSelect {
+  min-width: 260px;
 }
 
 .execution-controls input {
-  width: 180px;
+  width: 160px;
 }
 
 #runTesterInput {
-  width: 220px;
+  width: 180px;
 }
 
 .execution-controls input:disabled,
@@ -1507,17 +1537,20 @@ body.resizing-sidebar .app-shell {
   }
 
   .test-plan-summary {
-    grid-template-columns: minmax(0, 1fr) 18px;
+    grid-template-columns: auto minmax(220px, 300px) minmax(0, 1fr) auto 18px;
     gap: 6px 12px;
   }
 
-  .test-plan-scope,
-  .test-plan-summary strong {
-    grid-column: 1;
+  .test-plan-scope {
+    grid-column: 3;
   }
 
-  .test-plan-caret {
-    grid-column: 2;
+  .test-plan-summary strong {
+    grid-column: 4;
+  }
+
+  .test-plan-toggle {
+    grid-column: 5;
     grid-row: 1;
   }
 
@@ -1574,12 +1607,12 @@ body.resizing-sidebar .app-shell {
   }
 
   .execution-controls {
-    justify-content: flex-start;
-    align-items: flex-start;
+    justify-content: flex-end;
+    align-items: flex-end;
   }
 
   .execution-control-row {
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .execution-stats {
@@ -1623,6 +1656,21 @@ body.resizing-sidebar .app-shell {
 
   .workspace {
     padding: 14px 14px 24px;
+  }
+
+  .test-plan-summary {
+    grid-template-columns: minmax(0, 1fr) 18px;
+  }
+
+  .test-plan-select,
+  .test-plan-scope,
+  .test-plan-summary strong {
+    grid-column: 1 / -1;
+  }
+
+  .test-plan-toggle {
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .execution-stats {

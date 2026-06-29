@@ -68,6 +68,40 @@ def create_app(
                     keys.append(runs.key(file_path, case_id))
         return keys
 
+    def case_keys_for_run(run_id: str) -> list[str]:
+        data = runs.get_run(run_id, scope=store.scan_dirs)
+        run = data.get("run") or {}
+        if isinstance(run, dict):
+            case_scope = run.get("case_scope")
+            if isinstance(case_scope, list):
+                return [str(item or "") for item in case_scope if str(item or "").strip()]
+        return current_case_keys()
+
+    def unresolved_case_keys(source_run_id: str) -> list[str]:
+        source = runs.get_run(source_run_id, scope=store.scan_dirs)
+        source_run = source.get("run") or {}
+        if not isinstance(source_run, dict) or source_run.get("status") != "completed":
+            raise InvalidRunError(
+                "Complete the source test plan before creating a retest plan."
+            )
+        results = source.get("results") or {}
+        if not isinstance(results, dict):
+            results = {}
+        unresolved_statuses = {"failed", "blocked", "deferred"}
+        keys = []
+        for key in current_case_keys():
+            result = results.get(key)
+            status = ""
+            if isinstance(result, dict):
+                status = str(result.get("status") or "").strip().lower()
+            if status in unresolved_statuses:
+                keys.append(key)
+        if not keys:
+            raise InvalidRunError(
+                "No failed, blocked, or deferred cases found in the source test plan."
+            )
+        return keys
+
     def refresh_and_publish(reason: str) -> dict[str, Any]:
         summary = store.refresh()
         broker.publish(
@@ -219,12 +253,36 @@ def create_app(
     @app.post("/api/test-runs")
     def api_create_test_run():
         payload = request.get_json(silent=True) or {}
-        result = runs.create_run(
-            name=payload.get("name"),
-            scope=store.scan_dirs,
-            environment=payload.get("environment"),
-            tester=payload.get("tester"),
-        )
+        mode = str(payload.get("mode") or "full").strip().lower()
+        if mode == "retest":
+            mode = "retest_unresolved"
+        source_run_id = str(payload.get("source_run_id")
+                            or payload.get("sourceRunId") or "").strip()
+        try:
+            if mode == "retest_unresolved":
+                if not source_run_id:
+                    raise InvalidRunError(
+                        "Select a source test plan before creating a retest plan."
+                    )
+                case_scope = unresolved_case_keys(source_run_id)
+            elif mode == "full":
+                case_scope = current_case_keys()
+                source_run_id = ""
+            else:
+                raise InvalidRunError(f"Invalid test plan mode: {mode}")
+            result = runs.create_run(
+                name=payload.get("name"),
+                scope=store.scan_dirs,
+                environment=payload.get("environment"),
+                tester=payload.get("tester"),
+                mode=mode,
+                source_run_id=source_run_id or None,
+                case_scope=case_scope,
+            )
+        except RunNotFoundError:
+            return jsonify({"error": f"Test run not found: {source_run_id}"}), 404
+        except InvalidRunError as exc:
+            return jsonify({"error": str(exc)}), 400
         broker.publish({
             "type": "test_run",
             "action": "created",
@@ -248,7 +306,7 @@ def create_app(
                 environment=payload.get("environment"),
                 tester=payload.get("tester"),
                 scope=store.scan_dirs,
-                required_case_keys=current_case_keys(),
+                required_case_keys=case_keys_for_run(run_id),
             )
         except RunNotFoundError:
             return jsonify({"error": f"Test run not found: {run_id}"}), 404

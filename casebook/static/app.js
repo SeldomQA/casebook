@@ -54,12 +54,13 @@ function bindElements() {
     "executionPanel",
     "executionToggle",
     "executionPanelBody",
-    "executionRunTitle",
     "executionScopeText",
-    "executionScopeTitle",
     "runSelect",
+    "runModeSelect",
+    "sourceRunSelect",
     "runNameInput",
     "createRunButton",
+    "completionControlRow",
     "runEnvironmentInput",
     "runTesterInput",
     "completeRunButton",
@@ -104,6 +105,8 @@ function bindEvents() {
   els.reloadNowButton.addEventListener("click", () => reloadAfterExternalChange(true));
   els.executionToggle.addEventListener("click", toggleTestPlanPanel);
   els.runSelect.addEventListener("change", () => selectRun(els.runSelect.value));
+  els.runModeSelect.addEventListener("change", renderExecutionPanel);
+  els.sourceRunSelect.addEventListener("change", renderExecutionPanel);
   els.createRunButton.addEventListener("click", createRun);
   els.completeRunButton.addEventListener("click", completeRun);
   els.renumberIdsButton.addEventListener("click", renumberCurrentFile);
@@ -457,24 +460,56 @@ function renderExecutionPanel() {
   els.executionPanel.classList.toggle("expanded", state.testPlanExpanded);
   els.executionPanel.classList.toggle("collapsed", !state.testPlanExpanded);
   els.executionToggle.setAttribute("aria-expanded", String(state.testPlanExpanded));
-  els.executionScopeText.textContent = `Scope: ${scope}`;
-  els.executionScopeTitle.textContent = scope;
-  els.executionRunTitle.textContent = run ? `${run.name || run.id}` : "Test plan not enabled";
+  els.executionScopeText.textContent = run
+    ? `Scope: ${scope} - ${runModeLabel(run.mode)} - ${stats.total} cases`
+    : `Scope: ${scope}`;
   els.executionProgressText.textContent = run
     ? `${stats.executed} / ${stats.total} executed - ${percent}%`
     : "Not enabled";
 
   const options = [
-    `<option value="">No test plan</option>`,
-    ...runs.map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.name || item.id)}</option>`),
+    `<option value="">Current plan: none</option>`,
+    ...runs.map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(runOptionLabel(item))}</option>`),
   ];
   els.runSelect.innerHTML = options.join("");
   els.runSelect.value = state.currentRunId || "";
+  const createMode = els.runModeSelect.value || "full";
+  const previousSourceRunId = els.sourceRunSelect.value;
+  const sourceOptions = [
+    `<option value="">Source plan</option>`,
+    ...runs.map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(runOptionLabel(item))}</option>`),
+  ];
+  els.sourceRunSelect.innerHTML = sourceOptions.join("");
+  if (createMode === "retest_unresolved") {
+    if (previousSourceRunId && runs.some((item) => item.id === previousSourceRunId)) {
+      els.sourceRunSelect.value = previousSourceRunId;
+    } else if (state.currentRunId) {
+      els.sourceRunSelect.value = state.currentRunId;
+    }
+    if (!els.sourceRunSelect.value && runs.length) {
+      els.sourceRunSelect.value = runs[0].id;
+    }
+  } else {
+    els.sourceRunSelect.value = "";
+  }
+  els.sourceRunSelect.hidden = createMode !== "retest_unresolved";
+  els.sourceRunSelect.disabled = createMode !== "retest_unresolved";
+  els.runNameInput.placeholder = createMode === "retest_unresolved"
+    ? "New retest plan name"
+    : "New test plan name";
+  els.createRunButton.textContent = createMode === "retest_unresolved"
+    ? "Create retest"
+    : "Create plan";
+  els.createRunButton.title = createMode === "retest_unresolved"
+    ? "Create a new plan from the selected plan's failed, blocked, and deferred cases"
+    : "Create a full test plan for the current scope";
+  const canCompleteRun = Boolean(state.currentRunId && stats.total > 0 && stats.untested === 0);
+  els.completionControlRow.hidden = !canCompleteRun;
   els.runEnvironmentInput.value = run?.environment || defaults.environment;
   els.runTesterInput.value = run?.tester || defaults.tester;
-  els.runEnvironmentInput.disabled = !state.currentRunId;
-  els.runTesterInput.disabled = !state.currentRunId;
-  els.completeRunButton.disabled = !state.currentRunId;
+  els.runEnvironmentInput.disabled = !canCompleteRun;
+  els.runTesterInput.disabled = !canCompleteRun;
+  els.completeRunButton.disabled = !canCompleteRun;
   els.completeRunButton.title = state.currentRunId && stats.untested > 0
     ? `Cannot complete: ${stats.untested} untested cases remain`
     : "Complete test plan";
@@ -506,8 +541,23 @@ function syncRenumberButton() {
     : "Update case IDs using the current YAML order";
 }
 
+function runOptionLabel(run) {
+  const name = run.name || run.id;
+  const hasCaseTotal = run.case_total !== null && run.case_total !== undefined && run.case_total !== "";
+  const count = hasCaseTotal && Number.isFinite(Number(run.case_total))
+    ? ` - ${Number(run.case_total)} cases`
+    : "";
+  return `${name} - ${runModeLabel(run.mode)}${count}`;
+}
+
+function runModeLabel(mode) {
+  return mode === "retest_unresolved" ? "Retest" : "Full";
+}
+
 function testPlanStats() {
-  const total = Number(state.summary?.cases || 0);
+  const scopedKeys = currentRunCaseKeys();
+  const scopeSet = scopedKeys ? new Set(scopedKeys) : null;
+  const total = scopedKeys ? scopedKeys.length : Number(state.summary?.cases || 0);
   const stats = {
     total,
     executed: 0,
@@ -518,7 +568,8 @@ function testPlanStats() {
     untested: total,
   };
   const results = state.currentRun?.results || {};
-  Object.values(results).forEach((result) => {
+  Object.entries(results).forEach(([key, result]) => {
+    if (scopeSet && !scopeSet.has(key)) return;
     if (!result || typeof result !== "object") return;
     const status = String(result.status || "").toLowerCase();
     if (status in stats && status !== "untested") {
@@ -529,6 +580,25 @@ function testPlanStats() {
   stats.executed = Math.min(stats.executed, total);
   stats.untested = Math.max(total - stats.executed, 0);
   return stats;
+}
+
+function currentRunCaseKeys() {
+  const values = state.currentRun?.run?.case_scope;
+  if (!Array.isArray(values)) return null;
+  return values.map((value) => String(value || "").trim()).filter(Boolean);
+}
+
+function matchesRunCaseScope(caseItem) {
+  if (!state.currentRun || !state.currentData) return true;
+  const keys = currentRunCaseKeys();
+  if (!keys) return true;
+  return new Set(keys).has(markKey(state.currentData.path, caseItem.id));
+}
+
+function currentCasePool() {
+  const cases = state.currentData?.cases || [];
+  if (!state.currentRun) return cases;
+  return cases.filter(matchesRunCaseScope);
 }
 
 function executionResult(caseId) {
@@ -583,13 +653,13 @@ function renderExecutionFilter() {
 }
 
 function filterCounts() {
-  const cases = state.currentData?.cases || [];
+  const cases = currentCasePool();
   const counts = {
     all: cases.length,
     P0: 0,
     P1: 0,
     P2: 0,
-    needs: countNeedsUpdate(),
+    needs: cases.filter((caseItem) => isMarked(caseItem.id)).length,
   };
   cases.forEach((caseItem) => {
     const priority = String(caseItem.priority || "").toUpperCase();
@@ -601,7 +671,7 @@ function filterCounts() {
 }
 
 function executionFilterCounts() {
-  const cases = (state.currentData?.cases || []).filter(matchesPrimaryFilter);
+  const cases = currentCasePool().filter(matchesPrimaryFilter);
   const counts = {
     all: cases.length,
     passed: 0,
@@ -618,7 +688,7 @@ function executionFilterCounts() {
 
 function renderCaseRows() {
   if (!state.currentData) return;
-  const rows = state.currentData.cases
+  const rows = currentCasePool()
     .filter(matchesCurrentFilter)
     .map((caseItem) => {
       const key = markKey(state.currentData.path, caseItem.id);
@@ -764,6 +834,7 @@ function toggleCaseDetails(caseId) {
 }
 
 function matchesCurrentFilter(caseItem) {
+  if (!matchesRunCaseScope(caseItem)) return false;
   if (!matchesPrimaryFilter(caseItem)) return false;
   if (!matchesExecutionFilter(caseItem)) return false;
   if (!state.query) return true;
@@ -951,23 +1022,35 @@ async function selectRun(runId) {
 }
 
 async function createRun() {
+  const mode = els.runModeSelect.value || "full";
+  const sourceRunId = mode === "retest_unresolved" ? els.sourceRunSelect.value : "";
+  if (mode === "retest_unresolved" && !sourceRunId) {
+    showToast("Select a source test plan before creating a retest plan");
+    return;
+  }
   const name = els.runNameInput.value.trim() || defaultRunName();
-  const response = await api("/api/test-runs", {
-    method: "POST",
-    body: JSON.stringify({
-      name,
-      scope: state.summary?.scan_dirs || [],
-    }),
-  });
-  state.currentRun = response;
-  state.currentRunId = response.run.id;
-  state.testPlanExpanded = true;
-  els.runNameInput.value = "";
-  state.runs = await api("/api/test-runs");
-  renderExecutionPanel();
-  renderFilters();
-  renderCaseRows();
-  showToast("Test plan created");
+  try {
+    const response = await api("/api/test-runs", {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        mode,
+        source_run_id: sourceRunId,
+        scope: state.summary?.scan_dirs || [],
+      }),
+    });
+    state.currentRun = response;
+    state.currentRunId = response.run.id;
+    state.testPlanExpanded = true;
+    els.runNameInput.value = "";
+    state.runs = await api("/api/test-runs");
+    renderExecutionPanel();
+    renderFilters();
+    renderCaseRows();
+    showToast(mode === "retest_unresolved" ? "Retest plan created" : "Test plan created");
+  } catch (error) {
+    showToast(error.message);
+  }
 }
 
 async function completeRun() {
@@ -1047,6 +1130,12 @@ async function saveExecutionDetails(caseId) {
 }
 
 function defaultRunName() {
+  if (els.runModeSelect?.value === "retest_unresolved") {
+    const sourceRun = state.runs.find((item) => item.id === els.sourceRunSelect?.value);
+    if (sourceRun) {
+      return `${sourceRun.name || sourceRun.id} retest`;
+    }
+  }
   const now = new Date();
   const date = now.toISOString().slice(0, 10);
   return `${scopeLabel()} ${date}`;

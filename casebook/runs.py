@@ -9,6 +9,7 @@ from typing import Any
 
 
 EXECUTION_STATUSES = {"passed", "failed", "blocked", "deferred"}
+RUN_MODES = {"full", "retest_unresolved"}
 
 
 class RunNotFoundError(Exception):
@@ -39,10 +40,12 @@ class TestRunStore:
                     continue
                 if expected_scope is not None and self._normalize_scope(run.get("scope")) != expected_scope:
                     continue
+                case_scope = self._run_case_scope(run_data)
                 runs.append({
                     **run,
                     "result_counts": self._result_counts(run_data),
                     "result_total": len(run_data.get("results") or {}),
+                    "case_total": len(case_scope) if case_scope is not None else None,
                 })
             runs.sort(
                 key=lambda item: str(
@@ -62,17 +65,26 @@ class TestRunStore:
         scope: list[str] | None = None,
         environment: str | None = None,
         tester: str | None = None,
+        mode: str | None = None,
+        source_run_id: str | None = None,
+        case_scope: list[str] | None = None,
     ) -> dict[str, Any]:
         with self._lock:
             now = self._now()
             run_name = str(name or "").strip() or f"Test Run {now[:19]}"
             run_id = self._unique_run_id(run_name, now)
+            normalized_mode = str(mode or "full").strip().lower()
+            if normalized_mode not in RUN_MODES:
+                raise InvalidRunError(f"Invalid test plan mode: {mode}")
+            normalized_case_scope = self._normalize_case_scope(case_scope or [])
             data = {
                 "run": {
                     "id": run_id,
                     "name": run_name,
                     "status": "in_progress",
+                    "mode": normalized_mode,
                     "scope": self._normalize_scope(scope) or [],
+                    "case_scope": normalized_case_scope,
                     "environment": str(environment or "").strip(),
                     "tester": str(tester or "").strip(),
                     "started_at": now,
@@ -80,6 +92,10 @@ class TestRunStore:
                 },
                 "results": {},
             }
+            if source_run_id:
+                data["run"]["source_run_id"] = str(source_run_id).strip()
+            if normalized_mode == "retest_unresolved":
+                data["run"]["source_statuses"] = ["failed", "blocked", "deferred"]
             self._save(run_id, data)
             return data
 
@@ -99,7 +115,11 @@ class TestRunStore:
                 if not isinstance(run, dict) or self._normalize_scope(run.get("scope")) != expected_scope:
                     raise RunNotFoundError(run_id)
 
-            untested = self.untested_case_keys(data, required_case_keys or [])
+            if required_case_keys is None:
+                case_scope = self._run_case_scope(data)
+                required_case_keys = case_scope or []
+
+            untested = self.untested_case_keys(data, required_case_keys)
             if untested:
                 raise InvalidRunError(
                     f"Cannot complete test plan: {len(untested)} untested cases remain."
@@ -150,6 +170,9 @@ class TestRunStore:
                 if not isinstance(run, dict) or self._normalize_scope(run.get("scope")) != expected_scope:
                     raise RunNotFoundError(run_id)
             key = self.key(file_path, case_id)
+            case_scope = self._run_case_scope(data)
+            if case_scope is not None and key not in set(case_scope):
+                raise InvalidRunError("Case is not included in this test plan.")
             results = data.setdefault("results", {})
             if not isinstance(results, dict):
                 results = {}
@@ -211,6 +234,15 @@ class TestRunStore:
             if status not in EXECUTION_STATUSES:
                 untested.append(key)
         return untested
+
+    def _run_case_scope(self, data: dict[str, Any]) -> list[str] | None:
+        run = data.get("run") or {}
+        if not isinstance(run, dict) or "case_scope" not in run:
+            return None
+        case_scope = run.get("case_scope")
+        if not isinstance(case_scope, list):
+            return []
+        return self._normalize_case_scope(case_scope)
 
     def _load(self, run_id: str) -> dict[str, Any]:
         run_file = self._run_file(run_id)
@@ -275,12 +307,26 @@ class TestRunStore:
                 normalized.append(value)
         return normalized
 
+    def _normalize_case_scope(self, case_scope: Any) -> list[str]:
+        if not isinstance(case_scope, list):
+            case_scope = [case_scope]
+        normalized: list[str] = []
+        for item in case_scope:
+            value = str(item or "").strip()
+            if value and value not in normalized:
+                normalized.append(value)
+        return normalized
+
     def _result_counts(self, data: dict[str, Any]) -> dict[str, int]:
         counts = {status: 0 for status in sorted(EXECUTION_STATUSES)}
         results = data.get("results") or {}
         if not isinstance(results, dict):
             return counts
-        for result in results.values():
+        case_scope = self._run_case_scope(data)
+        case_scope_set = set(case_scope) if case_scope is not None else None
+        for key, result in results.items():
+            if case_scope_set is not None and key not in case_scope_set:
+                continue
             if not isinstance(result, dict):
                 continue
             status = str(result.get("status") or "").lower()
