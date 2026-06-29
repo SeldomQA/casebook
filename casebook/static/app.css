@@ -454,6 +454,7 @@ body.resizing-sidebar .app-shell {
   color: var(--text);
   padding: 10px 14px;
   text-align: left;
+  cursor: pointer;
 }
 
 .test-plan-title {
@@ -477,6 +478,7 @@ body.resizing-sidebar .app-shell {
   background: var(--surface);
   color: var(--text);
   padding: 0 10px;
+  cursor: default;
 }
 
 .test-plan-summary strong {
@@ -504,6 +506,7 @@ body.resizing-sidebar .app-shell {
   border: 0;
   background: transparent;
   padding: 0;
+  cursor: pointer;
 }
 
 .test-plan-caret {

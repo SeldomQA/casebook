@@ -52,6 +52,7 @@ function bindElements() {
     "emptyState",
     "fileView",
     "executionPanel",
+    "executionSummary",
     "executionToggle",
     "executionPanelBody",
     "executionScopeText",
@@ -103,6 +104,10 @@ function bindEvents() {
   window.addEventListener("resize", syncSidebarWidthToViewport);
   els.refreshButton.addEventListener("click", refreshAll);
   els.reloadNowButton.addEventListener("click", () => reloadAfterExternalChange(true));
+  els.executionSummary.addEventListener("click", (event) => {
+    if (event.target.closest("select, button")) return;
+    toggleTestPlanPanel();
+  });
   els.executionToggle.addEventListener("click", toggleTestPlanPanel);
   els.runSelect.addEventListener("change", () => selectRun(els.runSelect.value));
   els.runModeSelect.addEventListener("change", renderExecutionPanel);
