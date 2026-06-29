@@ -682,8 +682,7 @@ function renderCaseDetails(caseItem) {
         </div>
       </div>
       <div class="case-side-panel">
-        ${renderReviewDetails(caseItem)}
-        ${state.currentRun ? renderExecutionDetails(caseItem) : ""}
+        ${state.currentRun ? renderExecutionDetails(caseItem) : renderReviewDetails(caseItem)}
       </div>
     </div>`;
 }
