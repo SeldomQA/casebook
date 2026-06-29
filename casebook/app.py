@@ -53,6 +53,21 @@ def create_app(
     initial_summary = store.refresh()
     app.config["CASEBOOK_INITIAL_SUMMARY"] = initial_summary
 
+    def current_case_keys() -> list[str]:
+        keys: list[str] = []
+        for file_item in store.list_files():
+            file_path = str(file_item.get("path") or "")
+            if not file_path:
+                continue
+            entry = store.get_file(file_path)
+            if not entry:
+                continue
+            for case in entry.get("cases") or []:
+                case_id = str(case.get("id") or "")
+                if case_id:
+                    keys.append(runs.key(file_path, case_id))
+        return keys
+
     def refresh_and_publish(reason: str) -> dict[str, Any]:
         summary = store.refresh()
         broker.publish(
@@ -233,9 +248,12 @@ def create_app(
                 environment=payload.get("environment"),
                 tester=payload.get("tester"),
                 scope=store.scan_dirs,
+                required_case_keys=current_case_keys(),
             )
         except RunNotFoundError:
             return jsonify({"error": f"Test run not found: {run_id}"}), 404
+        except InvalidRunError as exc:
+            return jsonify({"error": str(exc)}), 400
         broker.publish({
             "type": "test_run",
             "action": "completed",

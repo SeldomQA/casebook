@@ -14,6 +14,7 @@ EXECUTION_STATUS_LABELS = {
     "passed": "Passed",
     "failed": "Failed",
     "blocked": "Blocked",
+    "deferred": "Deferred",
     "untested": "Untested",
 }
 
@@ -21,6 +22,7 @@ EXECUTION_STATUS_COLORS = {
     "passed": "#27b36a",
     "failed": "#e74c3c",
     "blocked": "#f5b400",
+    "deferred": "#7c3aed",
     "untested": "#cfd4dc",
 }
 
@@ -129,6 +131,7 @@ def render_report_html(data: dict[str, Any]) -> str:
       --passed: {EXECUTION_STATUS_COLORS["passed"]};
       --failed: {EXECUTION_STATUS_COLORS["failed"]};
       --blocked: {EXECUTION_STATUS_COLORS["blocked"]};
+      --deferred: {EXECUTION_STATUS_COLORS["deferred"]};
       --untested: {EXECUTION_STATUS_COLORS["untested"]};
     }}
     * {{ box-sizing: border-box; }}
@@ -244,6 +247,7 @@ def render_report_html(data: dict[str, Any]) -> str:
         {_stat("Passed", stats["passed"], "")}
         {_stat("Failed", stats["failed"], "failed")}
         {_stat("Blocked", stats["blocked"], "blocked")}
+        {_stat("Deferred", stats["deferred"], "")}
         {_stat("Untested", stats["untested"], "")}
       </div>
     </section>
@@ -380,6 +384,7 @@ def _build_stats(records: list[CaseRecord]) -> dict[str, int]:
         "passed": 0,
         "failed": 0,
         "blocked": 0,
+        "deferred": 0,
         "untested": 0,
     }
     for record in records:
@@ -411,6 +416,8 @@ def _chart_data(
                        EXECUTION_STATUS_COLORS["failed"], total),
             _chart_row("Blocked", stats["blocked"],
                        EXECUTION_STATUS_COLORS["blocked"], total),
+            _chart_row("Deferred", stats["deferred"],
+                       EXECUTION_STATUS_COLORS["deferred"], total),
             _chart_row("Untested", stats["untested"],
                        EXECUTION_STATUS_COLORS["untested"], total),
         ],
@@ -560,7 +567,7 @@ def _normalize_scope(scope: Any) -> list[str]:
 
 def _normalize_status(status: Any) -> str:
     value = str(status or "").strip().lower()
-    return value if value in {"passed", "failed", "blocked"} else "untested"
+    return value if value in {"passed", "failed", "blocked", "deferred"} else "untested"
 
 
 def _split_result_key(key: str) -> tuple[str, str]:

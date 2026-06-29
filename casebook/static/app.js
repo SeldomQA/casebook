@@ -26,6 +26,7 @@ const EXECUTION_FILTERS = [
   ["passed", "Passed"],
   ["failed", "Failed"],
   ["blocked", "Blocked"],
+  ["deferred", "Deferred"],
   ["untested", "Untested"],
 ];
 
@@ -474,6 +475,9 @@ function renderExecutionPanel() {
   els.runEnvironmentInput.disabled = !state.currentRunId;
   els.runTesterInput.disabled = !state.currentRunId;
   els.completeRunButton.disabled = !state.currentRunId;
+  els.completeRunButton.title = state.currentRunId && stats.untested > 0
+    ? `Cannot complete: ${stats.untested} untested cases remain`
+    : "Complete test plan";
   syncRenumberButton();
 
   els.executionProgressBar.style.width = `${percent}%`;
@@ -482,6 +486,7 @@ function renderExecutionPanel() {
     ["passed", "Passed", stats.passed],
     ["failed", "Failed", stats.failed],
     ["blocked", "Blocked", stats.blocked],
+    ["deferred", "Deferred", stats.deferred],
     ["untested", "Untested", stats.untested],
   ].map(([status, label, value]) => `
     <div class="execution-stat status-${status}">
@@ -509,6 +514,7 @@ function testPlanStats() {
     passed: 0,
     failed: 0,
     blocked: 0,
+    deferred: 0,
     untested: total,
   };
   const results = state.currentRun?.results || {};
@@ -534,7 +540,7 @@ function executionResult(caseId) {
 
 function executionStatus(caseId) {
   const status = executionResult(caseId)?.status || "untested";
-  return ["passed", "failed", "blocked"].includes(status) ? status : "untested";
+  return ["passed", "failed", "blocked", "deferred"].includes(status) ? status : "untested";
 }
 
 function renderFilters() {
@@ -601,6 +607,7 @@ function executionFilterCounts() {
     passed: 0,
     failed: 0,
     blocked: 0,
+    deferred: 0,
     untested: 0,
   };
   cases.forEach((caseItem) => {
@@ -686,6 +693,7 @@ function renderExecutionActions(caseId, currentStatus) {
     ["passed", "Pass"],
     ["failed", "Fail"],
     ["blocked", "Block"],
+    ["deferred", "Defer"],
   ];
   const disabled = state.currentRun ? "" : " disabled";
   return `
@@ -968,19 +976,28 @@ async function completeRun() {
     showToast("Select or create a test plan first");
     return;
   }
+  const stats = testPlanStats();
+  if (stats.untested > 0) {
+    showToast(`Cannot complete test plan: ${stats.untested} untested cases remain`);
+    return;
+  }
   const defaults = testPlanDefaults();
-  const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      environment: els.runEnvironmentInput.value.trim() || defaults.environment,
-      tester: els.runTesterInput.value.trim() || defaults.tester,
-    }),
-  });
-  state.currentRun = response;
-  state.runs = await api("/api/test-runs");
-  renderExecutionPanel();
-  renderCaseRows();
-  showToast("Test plan completed");
+  try {
+    const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        environment: els.runEnvironmentInput.value.trim() || defaults.environment,
+        tester: els.runTesterInput.value.trim() || defaults.tester,
+      }),
+    });
+    state.currentRun = response;
+    state.runs = await api("/api/test-runs");
+    renderExecutionPanel();
+    renderCaseRows();
+    showToast("Test plan completed");
+  } catch (error) {
+    showToast(error.message);
+  }
 }
 
 async function updateExecutionStatus(caseId, status) {

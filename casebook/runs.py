@@ -8,7 +8,7 @@ from threading import RLock
 from typing import Any
 
 
-EXECUTION_STATUSES = {"passed", "failed", "blocked"}
+EXECUTION_STATUSES = {"passed", "failed", "blocked", "deferred"}
 
 
 class RunNotFoundError(Exception):
@@ -89,6 +89,7 @@ class TestRunStore:
         environment: str | None = None,
         tester: str | None = None,
         scope: list[str] | None = None,
+        required_case_keys: list[str] | None = None,
     ) -> dict[str, Any]:
         with self._lock:
             data = self._load(run_id)
@@ -97,6 +98,12 @@ class TestRunStore:
                 run = data.get("run") or {}
                 if not isinstance(run, dict) or self._normalize_scope(run.get("scope")) != expected_scope:
                     raise RunNotFoundError(run_id)
+
+            untested = self.untested_case_keys(data, required_case_keys or [])
+            if untested:
+                raise InvalidRunError(
+                    f"Cannot complete test plan: {len(untested)} untested cases remain."
+                )
 
             now = self._now()
             run = data.setdefault("run", {})
@@ -186,6 +193,24 @@ class TestRunStore:
 
     def key(self, file_path: str, case_id: str) -> str:
         return f"{file_path}#{case_id}"
+
+    def untested_case_keys(
+        self,
+        data: dict[str, Any],
+        required_case_keys: list[str],
+    ) -> list[str]:
+        results = data.get("results") or {}
+        if not isinstance(results, dict):
+            results = {}
+        untested: list[str] = []
+        for key in required_case_keys:
+            result = results.get(key)
+            status = ""
+            if isinstance(result, dict):
+                status = str(result.get("status") or "").strip().lower()
+            if status not in EXECUTION_STATUSES:
+                untested.append(key)
+        return untested
 
     def _load(self, run_id: str) -> dict[str, Any]:
         run_file = self._run_file(run_id)

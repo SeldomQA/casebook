@@ -22,6 +22,9 @@
   --failed-soft: #fbe4e0;
   --blocked: #f4a100;
   --blocked-soft: #fff4dc;
+  --deferred: #7c3aed;
+  --deferred-soft: #ede9fe;
+  --deferred-border: #c4b5fd;
   --untested: #64748b;
   --untested-soft: #f1f5f9;
   --p0: #e81500;
@@ -596,7 +599,7 @@ body.resizing-sidebar .app-shell {
 
 .execution-stats {
   display: grid;
-  grid-template-columns: repeat(5, minmax(96px, 1fr));
+  grid-template-columns: repeat(6, minmax(90px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
@@ -702,6 +705,12 @@ body.resizing-sidebar .app-shell {
   --status: var(--blocked);
   --status-soft: var(--blocked-soft);
   --status-line: var(--p1-border);
+}
+
+.status-deferred {
+  --status: var(--deferred);
+  --status-soft: var(--deferred-soft);
+  --status-line: var(--deferred-border);
 }
 
 .status-untested {
