@@ -193,11 +193,12 @@ casebook export releases/example --priority P0
 
 测试计划默认折叠，不影响用例评审。进入执行阶段后，可以展开顶部测试计划面板：
 
-- 创建或选择测试计划。
-- 为每条用例选择 `Passed`、`Failed` 或 `Blocked`。
+- 创建或选择测试计划。新计划支持 `Full run` 和 `Retest failed/blocked/deferred` 两种模式。
+- `Full run` 覆盖当前启动范围内全部用例；`Retest failed/blocked/deferred` 基于已完成的上一轮，只带入失败、阻塞和延期用例。
+- 为每条用例选择 `Passed`、`Failed`、`Blocked` 或 `Deferred`。
 - 记录执行备注和 JIRA 缺陷链接。
 - 查看执行进度条和统计数据。
-- 点击 `Complete plan` 完成测试计划，并写入测试环境和测试人员。
+- 点击 `Complete plan` 完成本轮测试计划，并写入测试环境和测试人员；如果本轮范围内仍有 `Untested` 用例，计划不能完成。
 
 执行数据会保存到：
 

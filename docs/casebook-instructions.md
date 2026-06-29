@@ -168,7 +168,14 @@ casebook serve releases/v1-auth
 
 此时创建的测试计划只属于 `releases/v1-auth`，不会混入其他需求目录的计划。
 
-每个测试计划会记录名称、范围、开始时间、完成时间和每条用例的执行结果。执行过程中，最近一次执行、备注或缺陷链接更新时间会写入 `completed_at`；完成计划时，测试环境默认是 `Test environment`，测试人员默认来自当前启动范围内 YAML 文件的 `owner`，多个 owner 使用逗号分隔。
+每个测试计划会记录名称、范围、模式、用例范围、开始时间、完成时间和每条用例的执行结果。执行过程中，最近一次执行、备注或缺陷链接更新时间会写入 `completed_at`；完成计划时，测试环境默认是 `Test environment`，测试人员默认来自当前启动范围内 YAML 文件的 `owner`，多个 owner 使用逗号分隔。
+
+创建测试计划时支持两种模式：
+
+- `Full run`：全量执行当前 `casebook serve <目录>` 启动范围下的所有用例。
+- `Retest failed/blocked/deferred`：基于一个已完成的来源测试计划，只带入上一轮 `failed`、`blocked`、`deferred` 的用例。本轮不会继承上一轮结果，所有带入用例都会从 `untested` 开始重新执行。
+
+完成测试计划前，本轮 `case_scope` 内的每条用例都必须被处理过。也就是说，用例状态必须是 `passed`、`failed`、`blocked` 或 `deferred` 之一；仍然存在 `untested` 用例时，`Complete plan` 会拒绝完成。
 
 用例结果以 `文件路径#用例ID` 作为 key：
 
@@ -178,7 +185,11 @@ casebook serve releases/v1-auth
     "id": "run-20260625093000-login-smoke",
     "name": "Login smoke test",
     "status": "completed",
+    "mode": "full",
     "scope": ["releases/v1-auth"],
+    "case_scope": [
+      "releases/v1-auth/login.yaml#TC_LOGIN_001"
+    ],
     "environment": "Test environment",
     "tester": "qa",
     "started_at": "2026-06-25T01:30:00+00:00",
@@ -198,7 +209,7 @@ casebook serve releases/v1-auth
 支持的执行状态：
 
 ```text
-passed, failed, blocked
+passed, failed, blocked, deferred
 ```
 
 未出现在 `results` 中的用例视为未执行。
