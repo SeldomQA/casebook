@@ -27,6 +27,7 @@ app = typer.Typer(
 
 
 def configure_logging() -> None:
+    """Configure a compact Loguru format for all CLI and HTTP request logs."""
     logger.remove()
     logger.add(
         sys.stderr,
@@ -36,12 +37,14 @@ def configure_logging() -> None:
 
 
 def version_callback(value: bool) -> None:
+    """Handle the eager --version option before Typer validates commands."""
     if value:
         typer.echo(f"casebook {__version__}")
         raise typer.Exit()
 
 
 def _shorten_banner_value(value: object, max_length: int = 72) -> str:
+    """Keep long paths from breaking the startup banner layout."""
     text = str(value or "").strip()
     if len(text) <= max_length:
         return text
@@ -55,6 +58,7 @@ def _serve_banner(
     cases: object,
     watch: bool,
 ) -> str:
+    """Build the human-friendly server startup banner."""
     rows = [
         ("Version", f"v{__version__}"),
         ("Local UI", url),
@@ -85,6 +89,7 @@ def root(
         ),
     ] = False,
 ) -> None:
+    """Root Typer callback shared by every command."""
     configure_logging()
 
 
@@ -95,6 +100,7 @@ def serve_project(
     open_browser: bool = False,
     watch: bool = True,
 ) -> None:
+    """Start the local Casebook web server for the selected YAML paths."""
     from werkzeug.serving import WSGIRequestHandler, make_server
 
     from .app import create_app
@@ -163,6 +169,7 @@ def serve(
         typer.Option("--no-watch", help="Disable filesystem auto-refresh."),
     ] = False,
 ) -> None:
+    """CLI entry point for the local web UI."""
     serve_project(
         paths=paths or [],
         host=host,
@@ -173,6 +180,7 @@ def serve(
 
 
 def initialize_project(project: str, force: bool = False) -> None:
+    """Write the scaffold and print next steps for a new project."""
     from .initializer import ProjectInitError, init_project
 
     try:
@@ -207,6 +215,7 @@ def init(
         typer.Option("--force", help="Overwrite existing scaffold files."),
     ] = False,
 ) -> None:
+    """Create or update a Casebook project scaffold."""
     initialize_project(project, force=force)
 
 
@@ -233,6 +242,7 @@ def report(
             "--project-root", help="Project root. Defaults to the parent of test-runs/ or cwd."),
     ] = None,
 ) -> None:
+    """Generate an HTML report from one test run JSON file."""
     from .report import ReportError, generate_report
 
     try:
@@ -275,6 +285,7 @@ def export_cases(
         ),
     ] = None,
 ) -> None:
+    """Export YAML cases to a standalone review HTML file."""
     from .exporter import ExportError, generate_export
 
     try:
@@ -304,6 +315,7 @@ def renumber(
         ),
     ],
 ) -> None:
+    """Renumber case IDs in one YAML file."""
     from .renumber import CaseIdRenumberError, CaseIdRenumberer
 
     try:
@@ -325,6 +337,7 @@ def renumber(
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Run the Typer application, optionally with an explicit argv."""
     app(args=argv)
 
 

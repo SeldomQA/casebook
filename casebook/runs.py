@@ -13,20 +13,27 @@ RUN_MODES = {"full", "retest_unresolved"}
 
 
 class RunNotFoundError(Exception):
+    """Raised when a test run file is missing or outside the requested scope."""
+
     pass
 
 
 class InvalidRunError(Exception):
+    """Raised when a test run state transition or payload is invalid."""
+
     pass
 
 
 class TestRunStore:
-    def __init__(self, project_root: Path):
+    """JSON-backed storage for Casebook test plan execution data."""
+
+    def __init__(self, project_root: Path) -> None:
         self.project_root = project_root.resolve()
         self.path = self.project_root / "test-runs"
         self._lock = RLock()
 
     def list_runs(self, scope: list[str] | None = None) -> list[dict[str, Any]]:
+        """List test plans, newest activity first, optionally limited by scope."""
         expected_scope = self._normalize_scope(scope)
         with self._lock:
             runs = []
@@ -69,6 +76,7 @@ class TestRunStore:
         source_run_id: str | None = None,
         case_scope: list[str] | None = None,
     ) -> dict[str, Any]:
+        """Create a full or retest plan with an explicit case scope snapshot."""
         with self._lock:
             now = self._now()
             run_name = str(name or "").strip() or f"Test Run {now[:19]}"
@@ -76,7 +84,10 @@ class TestRunStore:
             normalized_mode = str(mode or "full").strip().lower()
             if normalized_mode not in RUN_MODES:
                 raise InvalidRunError(f"Invalid test plan mode: {mode}")
-            normalized_case_scope = self._normalize_case_scope(case_scope or [])
+            # Store a stable case_scope so later YAML additions do not silently
+            # change what this execution round means.
+            normalized_case_scope = self._normalize_case_scope(
+                case_scope or [])
             data = {
                 "run": {
                     "id": run_id,
@@ -95,7 +106,8 @@ class TestRunStore:
             if source_run_id:
                 data["run"]["source_run_id"] = str(source_run_id).strip()
             if normalized_mode == "retest_unresolved":
-                data["run"]["source_statuses"] = ["failed", "blocked", "deferred"]
+                data["run"]["source_statuses"] = [
+                    "failed", "blocked", "deferred"]
             self._save(run_id, data)
             return data
 
@@ -107,6 +119,7 @@ class TestRunStore:
         scope: list[str] | None = None,
         required_case_keys: list[str] | None = None,
     ) -> dict[str, Any]:
+        """Mark a plan complete only after all required cases have a result."""
         with self._lock:
             data = self._load(run_id)
             expected_scope = self._normalize_scope(scope)
@@ -133,7 +146,8 @@ class TestRunStore:
             run["status"] = "completed"
             run["environment"] = str(environment or "").strip()
             run["tester"] = str(tester or "").strip()
-            run["started_at"] = str(run.get("started_at") or run.get("created_at") or now)
+            run["started_at"] = str(
+                run.get("started_at") or run.get("created_at") or now)
             run["completed_at"] = now
             run.pop("build", None)
             run.pop("created_at", None)
@@ -142,6 +156,7 @@ class TestRunStore:
             return data
 
     def get_run(self, run_id: str, scope: list[str] | None = None) -> dict[str, Any]:
+        """Load a test plan and optionally verify that it belongs to a scope."""
         with self._lock:
             data = self._load(run_id)
             expected_scope = self._normalize_scope(scope)
@@ -162,6 +177,7 @@ class TestRunStore:
         tester: str | None = None,
         scope: list[str] | None = None,
     ) -> dict[str, Any]:
+        """Update one case execution result inside a test plan."""
         with self._lock:
             data = self._load(run_id)
             expected_scope = self._normalize_scope(scope)
@@ -172,13 +188,15 @@ class TestRunStore:
             key = self.key(file_path, case_id)
             case_scope = self._run_case_scope(data)
             if case_scope is not None and key not in set(case_scope):
-                raise InvalidRunError("Case is not included in this test plan.")
+                raise InvalidRunError(
+                    "Case is not included in this test plan.")
             results = data.setdefault("results", {})
             if not isinstance(results, dict):
                 results = {}
                 data["results"] = results
 
-            existing = results.get(key) if isinstance(results.get(key), dict) else {}
+            existing = results.get(key) if isinstance(
+                results.get(key), dict) else {}
             now = self._now()
             next_result = {
                 "status": existing.get("status", "untested"),
@@ -190,7 +208,8 @@ class TestRunStore:
             if status:
                 normalized_status = str(status).strip().lower()
                 if normalized_status not in EXECUTION_STATUSES:
-                    raise InvalidRunError(f"Invalid execution status: {status}")
+                    raise InvalidRunError(
+                        f"Invalid execution status: {status}")
                 next_result["status"] = normalized_status
                 next_result["executed_at"] = now
             elif existing.get("executed_at"):
@@ -206,7 +225,8 @@ class TestRunStore:
             results[key] = next_result
             run = data.setdefault("run", {})
             if isinstance(run, dict):
-                run["started_at"] = str(run.get("started_at") or run.get("created_at") or now)
+                run["started_at"] = str(
+                    run.get("started_at") or run.get("created_at") or now)
                 run["completed_at"] = now
                 run.pop("build", None)
                 run.pop("created_at", None)
@@ -215,6 +235,7 @@ class TestRunStore:
             return {"key": key, "result": next_result, "run": data}
 
     def key(self, file_path: str, case_id: str) -> str:
+        """Build the canonical execution key used in run JSON files."""
         return f"{file_path}#{case_id}"
 
     def untested_case_keys(
@@ -222,6 +243,7 @@ class TestRunStore:
         data: dict[str, Any],
         required_case_keys: list[str],
     ) -> list[str]:
+        """Return required case keys that do not yet have an execution status."""
         results = data.get("results") or {}
         if not isinstance(results, dict):
             results = {}
@@ -236,6 +258,7 @@ class TestRunStore:
         return untested
 
     def _run_case_scope(self, data: dict[str, Any]) -> list[str] | None:
+        """Return None for legacy plans that predate case_scope snapshots."""
         run = data.get("run") or {}
         if not isinstance(run, dict) or "case_scope" not in run:
             return None
@@ -245,16 +268,19 @@ class TestRunStore:
         return self._normalize_case_scope(case_scope)
 
     def _load(self, run_id: str) -> dict[str, Any]:
+        """Load a run by ID after validating the filesystem-safe ID."""
         run_file = self._run_file(run_id)
         if not run_file.exists():
             raise RunNotFoundError(run_id)
         return self._load_file(run_file)
 
     def _load_file(self, run_file: Path) -> dict[str, Any]:
+        """Load one run JSON file and fall back to an empty shape if needed."""
         data = json.loads(run_file.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {"run": {}, "results": {}}
 
     def _save(self, run_id: str, data: dict[str, Any]) -> None:
+        """Persist a test plan as human-readable JSON."""
         self.path.mkdir(parents=True, exist_ok=True)
         self._run_file(run_id).write_text(
             json.dumps(data, ensure_ascii=False, indent=2),
@@ -262,12 +288,14 @@ class TestRunStore:
         )
 
     def _run_file(self, run_id: str) -> Path:
+        """Return the path for a safe run ID."""
         safe_id = self._safe_run_id(run_id)
         if safe_id != run_id:
             raise RunNotFoundError(run_id)
         return self.path / f"{safe_id}.json"
 
     def _unique_run_id(self, name: str, now: str) -> str:
+        """Generate a stable, readable run ID and avoid collisions."""
         timestamp = re.sub(r"\D", "", now[:19])
         slug = self._slug(name)
         base = f"run-{timestamp}-{slug}" if slug else f"run-{timestamp}"
@@ -279,16 +307,19 @@ class TestRunStore:
         return run_id
 
     def _safe_run_id(self, run_id: str) -> str:
+        """Reject path separators and empty IDs before touching test-runs/."""
         value = str(run_id or "").strip()
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", value):
             raise RunNotFoundError(run_id)
         return value
 
     def _slug(self, value: str) -> str:
+        """Create the readable suffix used in generated run IDs."""
         slug = re.sub(r"[^A-Za-z0-9]+", "-", value.strip().lower()).strip("-")
         return slug[:48]
 
     def _normalize_defects(self, defects: list[str] | str) -> list[str]:
+        """Accept textarea or JSON-list defect input and remove blanks."""
         if isinstance(defects, str):
             items = re.split(r"[\n,]+", defects)
         else:
@@ -296,6 +327,7 @@ class TestRunStore:
         return [item.strip() for item in items if item.strip()]
 
     def _normalize_scope(self, scope: Any) -> list[str] | None:
+        """Normalize a plan scope without inventing a default value."""
         if scope is None:
             return None
         if not isinstance(scope, list):
@@ -308,6 +340,7 @@ class TestRunStore:
         return normalized
 
     def _normalize_case_scope(self, case_scope: Any) -> list[str]:
+        """Normalize and de-duplicate canonical case keys."""
         if not isinstance(case_scope, list):
             case_scope = [case_scope]
         normalized: list[str] = []
@@ -318,6 +351,7 @@ class TestRunStore:
         return normalized
 
     def _result_counts(self, data: dict[str, Any]) -> dict[str, int]:
+        """Count results, respecting retest case_scope when present."""
         counts = {status: 0 for status in sorted(EXECUTION_STATUSES)}
         results = data.get("results") or {}
         if not isinstance(results, dict):
@@ -335,4 +369,5 @@ class TestRunStore:
         return counts
 
     def _now(self) -> str:
+        """Return an ISO timestamp in UTC for portable run files."""
         return datetime.now(timezone.utc).isoformat()

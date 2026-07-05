@@ -37,15 +37,21 @@ FIELD_ORDER = [
 
 
 class EditConflictError(Exception):
+    """Raised when a YAML file changed after the browser loaded it."""
+
     pass
 
 
 class CaseNotFoundError(Exception):
+    """Raised when an edit targets a case ID that no longer exists."""
+
     pass
 
 
 class CaseEditor:
-    def __init__(self, project_root: Path):
+    """Apply narrow browser edits back to YAML while preserving formatting."""
+
+    def __init__(self, project_root: Path) -> None:
         self.project_root = project_root.resolve()
         self.yaml = YAML(typ="rt")
         self.yaml.preserve_quotes = True
@@ -59,6 +65,7 @@ class CaseEditor:
         updates: dict[str, Any],
         mtime_ns: int | None = None,
     ) -> dict[str, Any]:
+        """Update a single test case and return its refreshed API representation."""
         target = resolve_project_path(self.project_root, file_path)
         if not target.exists():
             raise FileNotFoundError(file_path)
@@ -84,6 +91,7 @@ class CaseEditor:
         raise CaseNotFoundError(case_id)
 
     def _apply_updates(self, case: dict[str, Any], updates: dict[str, Any]) -> None:
+        """Apply only schema-approved fields from a browser payload."""
         for field, value in updates.items():
             if field not in ALLOWED_FIELDS:
                 continue
@@ -104,6 +112,7 @@ class CaseEditor:
                 self._set_field(case, field, "" if value is None else str(value))
 
     def _empty_missing_value(self, field: str, value: Any) -> bool:
+        """Avoid adding empty optional fields to otherwise clean YAML cases."""
         if field == "auto":
             return value in {False, None, ""}
         if field in LIST_FIELDS:
@@ -119,6 +128,7 @@ class CaseEditor:
         return False
 
     def _set_field(self, case: dict[str, Any], field: str, value: Any) -> None:
+        """Set a field while preserving schema field order for ruamel maps."""
         if field in case:
             case[field] = value
             return
@@ -128,6 +138,7 @@ class CaseEditor:
         case[field] = value
 
     def _insert_index(self, case: CommentedMap, field: str) -> int:
+        """Find the insertion point that keeps generated YAML easy to scan."""
         keys = list(case.keys())
         try:
             field_order_index = FIELD_ORDER.index(field)
@@ -139,6 +150,7 @@ class CaseEditor:
         return len(keys)
 
     def _list_value(self, value: Any, existing: Any) -> CommentedSeq:
+        """Normalize textarea/list input and preserve existing flow-style lists."""
         seq = CommentedSeq()
         if isinstance(value, str):
             items = [line.strip() for line in value.splitlines()]

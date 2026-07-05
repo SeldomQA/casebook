@@ -10,6 +10,8 @@ from .scanner import CasebookStore, compute_stats, relative_path
 
 
 class ExportError(Exception):
+    """Raised when YAML cases cannot be exported to review HTML."""
+
     pass
 
 
@@ -20,6 +22,7 @@ def generate_export(
     tags: list[str] | None = None,
     project_root: Path | None = None,
 ) -> Path:
+    """Generate a standalone review HTML file from a YAML file or directory."""
     root = (project_root or Path.cwd()).expanduser().resolve()
     source_path = _resolve_source(root, source)
     priority_filters = _normalize_priorities(priorities or [])
@@ -37,6 +40,7 @@ def generate_export(
 
 
 def render_export_html(data: dict[str, Any]) -> str:
+    """Render the standalone review HTML with embedded case data."""
     export_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     title = f"Casebook Export - {data['title']}"
     return f"""<!doctype html>
@@ -743,6 +747,7 @@ def _build_export_data(
     priorities: list[str],
     tags: list[str],
 ) -> dict[str, Any]:
+    """Build the JSON payload embedded into the static review page."""
     files = [_entry_for_export(entry) for entry in entries]
     stats = _compute_export_stats(files)
     slug = _slug(source_path.stem if source_path.is_file() else source_path.name or "casebook")
@@ -763,6 +768,7 @@ def _build_export_data(
 
 
 def _entry_for_export(entry: dict[str, Any]) -> dict[str, Any]:
+    """Flatten file metadata into the shape consumed by export JavaScript."""
     file_tags = [str(tag) for tag in entry.get("file_tags", [])]
     cases = []
     for case in entry.get("cases", []):
@@ -785,6 +791,7 @@ def _entry_for_export(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compute_export_stats(files: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute export stats across case and file-level tags."""
     cases = [case for file in files for case in file["cases"]]
     stats = compute_stats(cases)
     tags: dict[str, int] = {}
@@ -797,6 +804,7 @@ def _compute_export_stats(files: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _collect_entries(project_root: Path, source_path: Path) -> list[dict[str, Any]]:
+    """Collect parsed Casebook entries from one YAML file or directory."""
     if source_path.is_file():
         if source_path.suffix.lower() not in {".yaml", ".yml"}:
             raise ExportError("Export source must be a YAML file or a directory.")
@@ -826,6 +834,7 @@ def _filter_entries(
     priorities: list[str],
     tags: list[str],
 ) -> list[dict[str, Any]]:
+    """Filter cases while keeping their parent file metadata."""
     filtered_entries: list[dict[str, Any]] = []
     tag_set = {tag.lower() for tag in tags}
     priority_set = set(priorities)
@@ -848,6 +857,7 @@ def _filter_entries(
 
 
 def _resolve_source(project_root: Path, source: Path) -> Path:
+    """Resolve export source and keep it inside the project root."""
     raw = source.expanduser()
     resolved = raw.resolve() if raw.is_absolute() else (project_root / raw).resolve()
     if resolved != project_root and project_root not in resolved.parents:
@@ -858,6 +868,7 @@ def _resolve_source(project_root: Path, source: Path) -> Path:
 
 
 def _default_output(source_path: Path, output_file: Path | None) -> Path:
+    """Pick a predictable output path when --output is omitted."""
     if output_file:
         return output_file.expanduser().resolve()
     if source_path.is_file():
@@ -866,6 +877,7 @@ def _default_output(source_path: Path, output_file: Path | None) -> Path:
 
 
 def _normalize_priorities(values: list[str]) -> list[str]:
+    """Normalize repeated or comma-separated priority filters."""
     priorities: list[str] = []
     for raw in values:
         for item in str(raw).split(","):
@@ -880,6 +892,7 @@ def _normalize_priorities(values: list[str]) -> list[str]:
 
 
 def _normalize_tags(values: list[str]) -> list[str]:
+    """Normalize repeated or comma-separated tag filters."""
     tags: list[str] = []
     for raw in values:
         for item in str(raw).split(","):
@@ -890,11 +903,13 @@ def _normalize_tags(values: list[str]) -> list[str]:
 
 
 def _relative_or_dot(project_root: Path, path: Path) -> str:
+    """Return '.' for the project root so CasebookStore scans correctly."""
     rel = relative_path(project_root, path)
     return rel if rel else "."
 
 
 def _source_label(project_root: Path, source_path: Path) -> str:
+    """Build the human-readable source label shown in exported HTML."""
     try:
         return relative_path(project_root, source_path)
     except ValueError:
@@ -902,6 +917,7 @@ def _source_label(project_root: Path, source_path: Path) -> str:
 
 
 def _slug(value: str) -> str:
+    """Create a filesystem-friendly name for generated downloads."""
     slug = "".join(ch.lower() if ch.isalnum() else "-" for ch in value).strip("-")
     while "--" in slug:
         slug = slug.replace("--", "-")
@@ -909,4 +925,5 @@ def _slug(value: str) -> str:
 
 
 def _html(value: Any) -> str:
+    """Escape dynamic HTML content."""
     return escape(str(value), quote=True)

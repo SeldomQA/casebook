@@ -1,23 +1,29 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
+from importlib.abc import Traversable
 from importlib import resources
 from pathlib import Path
-from typing import Iterable
 
 
 class ProjectInitError(Exception):
+    """Raised when a project scaffold cannot be written safely."""
+
     pass
 
 
 @dataclass(frozen=True)
 class ProjectInitResult:
+    """Result of copying the Casebook project template."""
+
     project_root: Path
     created: list[Path]
     skipped: list[Path]
 
 
 def init_project(project_path: str | Path, force: bool = False) -> ProjectInitResult:
+    """Create or update a Casebook project from bundled scaffold files."""
     project_root = Path(project_path).expanduser().resolve()
     if project_root.exists() and not project_root.is_dir():
         raise ProjectInitError(f"Target exists and is not a directory: {project_root}")
@@ -45,7 +51,11 @@ def init_project(project_path: str | Path, force: bool = False) -> ProjectInitRe
     )
 
 
-def _iter_template_files(root, prefix: Path = Path()) -> Iterable[tuple[Path, object]]:
+def _iter_template_files(
+    root: Traversable,
+    prefix: Path = Path(),
+) -> Iterator[tuple[Path, Traversable]]:
+    """Yield scaffold files with stable relative paths for reproducible output."""
     for child in sorted(root.iterdir(), key=lambda item: item.name):
         relative_path = prefix / child.name
         if child.is_dir():

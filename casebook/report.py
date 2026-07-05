@@ -28,11 +28,15 @@ EXECUTION_STATUS_COLORS = {
 
 
 class ReportError(Exception):
+    """Raised when a test report cannot be generated from a run file."""
+
     pass
 
 
 @dataclass(frozen=True)
 class CaseRecord:
+    """Flattened case definition plus execution result for report rendering."""
+
     key: str
     file_path: str
     case_id: str
@@ -50,6 +54,7 @@ def generate_report(
     output_file: Path | None = None,
     project_root: Path | None = None,
 ) -> Path:
+    """Generate and write an HTML report for one test run JSON file."""
     run_path = run_file.expanduser().resolve()
     if not run_path.exists() or not run_path.is_file():
         raise ReportError(f"Run file not found: {run_file}")
@@ -68,6 +73,7 @@ def generate_report(
 
 
 def build_report_data(run_data: dict[str, Any], project_root: Path) -> dict[str, Any]:
+    """Merge run JSON with current YAML case definitions for report rendering."""
     run = run_data.get("run") or {}
     if not isinstance(run, dict):
         raise ReportError("Invalid run file: missing run object")
@@ -110,6 +116,7 @@ def build_report_data(run_data: dict[str, Any], project_root: Path) -> dict[str,
 
 
 def render_report_html(data: dict[str, Any]) -> str:
+    """Render a standalone HTML report string."""
     run = data["run"]
     stats = data["stats"]
     failed_cases = data["failed_cases"]
@@ -325,6 +332,7 @@ def _collect_case_records(
     results: dict[str, Any],
     case_scope: list[str] | None = None,
 ) -> list[CaseRecord]:
+    """Collect report records, including historical results for missing YAML cases."""
     store = CasebookStore(project_root=project_root, scan_dirs=scope or None)
     store.refresh()
 
@@ -372,6 +380,7 @@ def _record_from_case(
     key: str,
     result: dict[str, Any],
 ) -> CaseRecord:
+    """Build one report row from a normalized case and result object."""
     status = _normalize_status(result.get("status"))
     return CaseRecord(
         key=key,
@@ -388,6 +397,7 @@ def _record_from_case(
 
 
 def _build_stats(records: list[CaseRecord]) -> dict[str, int]:
+    """Count execution statuses for the overview section."""
     stats = {
         "total": len(records),
         "executed": 0,
@@ -409,6 +419,7 @@ def _chart_data(
     failed_cases: list[CaseRecord],
     blocked_cases: list[CaseRecord],
 ) -> dict[str, Any]:
+    """Prepare ECharts-friendly data without leaking presentation logic upward."""
     total = stats["total"] or 0
     pass_rate = (stats["passed"] / total * 100) if total else 0
     priority_counts = {"P0": 0, "P1": 0, "P2": 0}
@@ -443,6 +454,7 @@ def _chart_data(
 
 
 def _chart_row(label: str, value: int, color: str, total: int) -> dict[str, Any]:
+    """Build one chart legend row with a preformatted percentage."""
     percent = (value / total * 100) if total else 0
     return {
         "label": label,
@@ -453,6 +465,7 @@ def _chart_row(label: str, value: int, color: str, total: int) -> dict[str, Any]
 
 
 def _case_table(title: str, records: list[CaseRecord]) -> str:
+    """Render a failure or blocked-case section."""
     rows = "\n".join(_case_row(record) for record in records)
     body = rows if rows else '<div class="empty">No records</div>'
     return f"""
@@ -467,6 +480,7 @@ def _case_table(title: str, records: list[CaseRecord]) -> str:
 
 
 def _case_row(record: CaseRecord) -> str:
+    """Render one report table row."""
     priority_class = f"priority-{_html(record.priority.lower())}"
     return f"""
       <tr>
@@ -482,6 +496,7 @@ def _case_row(record: CaseRecord) -> str:
 
 
 def _normalize_defects(value: Any) -> list[str]:
+    """Accept legacy string/list defect fields and return clean links or IDs."""
     if isinstance(value, list):
         items = value
     elif isinstance(value, str):
@@ -492,6 +507,7 @@ def _normalize_defects(value: Any) -> list[str]:
 
 
 def _defects_html(defects: list[str]) -> str:
+    """Render defect IDs and links with safe escaping."""
     if not defects:
         return "-"
     items = []
@@ -505,6 +521,7 @@ def _defects_html(defects: list[str]) -> str:
 
 
 def _legend(rows: list[dict[str, Any]]) -> str:
+    """Render a chart legend used next to each donut chart."""
     items = "\n".join(
         f"""
         <div class="legend-row">
@@ -520,6 +537,7 @@ def _legend(rows: list[dict[str, Any]]) -> str:
 
 
 def _stat(label: str, value: int, class_name: str) -> str:
+    """Render one top-level statistic tile."""
     return f"""
       <div class="stat {_html(class_name)}">
         <div>
@@ -531,6 +549,7 @@ def _stat(label: str, value: int, class_name: str) -> str:
 
 
 def _plan_info(run: dict[str, Any]) -> str:
+    """Render the test plan metadata block above the statistics."""
     fields = [
         ("Plan ID", run.get("id")),
         ("Plan Name", run.get("name")),
@@ -557,6 +576,7 @@ def _plan_info(run: dict[str, Any]) -> str:
 
 
 def _load_run_data(run_path: Path) -> dict[str, Any]:
+    """Load run JSON and fail with report-specific errors."""
     try:
         data = json.loads(run_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
@@ -567,29 +587,34 @@ def _load_run_data(run_path: Path) -> dict[str, Any]:
 
 
 def _infer_project_root(run_path: Path) -> Path:
+    """Infer project root from test-runs/<run>.json when not provided."""
     if run_path.parent.name == "test-runs":
         return run_path.parent.parent.resolve()
     return Path.cwd().resolve()
 
 
 def _normalize_scope(scope: Any) -> list[str]:
+    """Normalize a run scope for CasebookStore scanning."""
     if not isinstance(scope, list):
         return []
     return [str(item).strip().rstrip("/\\") for item in scope if str(item).strip()]
 
 
 def _normalize_case_scope(case_scope: Any) -> list[str] | None:
+    """Return None for legacy reports that should include all scanned cases."""
     if not isinstance(case_scope, list):
         return None
     return [str(item or "").strip() for item in case_scope if str(item or "").strip()]
 
 
 def _normalize_status(status: Any) -> str:
+    """Map unknown or missing execution statuses to untested."""
     value = str(status or "").strip().lower()
     return value if value in {"passed", "failed", "blocked", "deferred"} else "untested"
 
 
 def _split_result_key(key: str) -> tuple[str, str]:
+    """Split canonical file#case keys while tolerating legacy bare IDs."""
     if "#" not in key:
         return "", key
     file_path, case_id = key.rsplit("#", 1)
@@ -597,15 +622,18 @@ def _split_result_key(key: str) -> tuple[str, str]:
 
 
 def _html(value: Any) -> str:
+    """Escape dynamic HTML content."""
     return escape(str(value), quote=True)
 
 
 def _display_value(value: Any) -> str:
+    """Display empty metadata consistently."""
     text = str(value or "").strip()
     return text if text else "--"
 
 
 def _run_status_label(value: Any) -> str:
+    """Convert stored run status codes into report labels."""
     labels = {
         "in_progress": "In Progress",
         "completed": "Completed",
@@ -619,6 +647,7 @@ def _run_status_label(value: Any) -> str:
 
 
 def _run_mode_label(value: Any) -> str:
+    """Convert stored run mode codes into report labels."""
     labels = {
         "full": "Full run",
         "retest_unresolved": "Retest failed/blocked/deferred",

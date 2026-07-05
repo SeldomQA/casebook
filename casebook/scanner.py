@@ -12,6 +12,7 @@ DEFAULT_SCAN_DIRS = ["releases"]
 
 
 def normalize_scan_dirs(project_root: Path, scan_dirs: list[str] | None) -> list[str]:
+    """Normalize user-provided scan directories and keep legacy release/ paths working."""
     normalized: list[str] = []
     for raw_dir in scan_dirs or []:
         value = str(raw_dir).strip().rstrip("/\\")
@@ -27,10 +28,12 @@ def normalize_scan_dirs(project_root: Path, scan_dirs: list[str] | None) -> list
 
 
 def relative_path(project_root: Path, path: Path) -> str:
+    """Return a POSIX-style path relative to the Casebook project root."""
     return path.relative_to(project_root).as_posix()
 
 
 def resolve_project_path(project_root: Path, rel_path: str) -> Path:
+    """Resolve a project-relative path and reject path traversal."""
     candidate = (project_root / rel_path).resolve()
     root = project_root.resolve()
     if candidate != root and root not in candidate.parents:
@@ -39,6 +42,7 @@ def resolve_project_path(project_root: Path, rel_path: str) -> Path:
 
 
 def compute_stats(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute summary counters used by the API, export page, and sidebar."""
     priorities = Counter()
     types = Counter()
     tags = Counter()
@@ -60,6 +64,7 @@ def compute_stats(cases: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def normalize_list(value: Any) -> list[str]:
+    """Convert a YAML scalar/list/missing value into a list of strings."""
     if value is None:
         return []
     if isinstance(value, list):
@@ -68,11 +73,13 @@ def normalize_list(value: Any) -> list[str]:
 
 
 def normalize_priority(value: Any) -> str:
+    """Normalize unknown priorities to P2, the safest default."""
     priority = str(value or "P2").upper()
     return priority if priority in {"P0", "P1", "P2"} else "P2"
 
 
 def case_to_api(case: dict[str, Any], index: int) -> dict[str, Any]:
+    """Convert raw YAML case data into the stable frontend API shape."""
     return {
         "index": index,
         "id": str(case.get("id", "N/A")),
@@ -89,7 +96,9 @@ def case_to_api(case: dict[str, Any], index: int) -> dict[str, Any]:
 
 
 class CasebookStore:
-    def __init__(self, project_root: Path, scan_dirs: list[str] | None = None):
+    """Thread-safe cache of parsed YAML case files for one Casebook scope."""
+
+    def __init__(self, project_root: Path, scan_dirs: list[str] | None = None) -> None:
         self.project_root = project_root.resolve()
         self.scan_dirs = normalize_scan_dirs(self.project_root, scan_dirs)
         self._yaml = YAML(typ="rt")
@@ -99,6 +108,7 @@ class CasebookStore:
         self.version = 0
 
     def refresh(self) -> dict[str, Any]:
+        """Re-scan YAML files and return the updated project summary."""
         entries: list[dict[str, Any]] = []
         for scan_dir in self.scan_dirs:
             root_path = resolve_project_path(self.project_root, scan_dir)
@@ -118,6 +128,7 @@ class CasebookStore:
             return self.summary()
 
     def _parse_file(self, yaml_file: Path) -> dict[str, Any] | None:
+        """Parse one YAML file, ignoring files outside the Casebook schema shape."""
         try:
             data = self._yaml.load(yaml_file.read_text(encoding="utf-8"))
         except Exception as exc:
@@ -150,6 +161,7 @@ class CasebookStore:
         return entry
 
     def summary(self) -> dict[str, Any]:
+        """Return aggregate statistics for the current cache."""
         with self._lock:
             cases = [case for entry in self._entries for case in entry["cases"]]
             stats = compute_stats(cases)
@@ -168,6 +180,7 @@ class CasebookStore:
             }
 
     def list_files(self) -> list[dict[str, Any]]:
+        """Return file-level metadata without full case detail payloads."""
         with self._lock:
             return [
                 {
@@ -184,6 +197,7 @@ class CasebookStore:
             ]
 
     def get_file(self, file_path: str) -> dict[str, Any] | None:
+        """Return one file with full case details."""
         with self._lock:
             entry = self._entries_by_path.get(file_path)
             if not entry:
@@ -201,6 +215,7 @@ class CasebookStore:
             }
 
     def tree(self) -> list[dict[str, Any]]:
+        """Build a directory tree that the sidebar can render directly."""
         with self._lock:
             root: OrderedDict[str, Any] = OrderedDict()
             for entry in self._entries:
@@ -212,6 +227,7 @@ class CasebookStore:
             return self._build_tree(root)
 
     def _build_tree(self, children: OrderedDict[str, Any]) -> list[dict[str, Any]]:
+        """Convert nested OrderedDict nodes into sorted tree dictionaries."""
         items: list[dict[str, Any]] = []
         for name, value in children.items():
             if isinstance(value, dict) and "_file" in value:
@@ -236,6 +252,7 @@ class CasebookStore:
         return items
 
     def _tree_count(self, item: dict[str, Any]) -> int:
+        """Count test cases in a file or directory tree node."""
         if item["type"] == "file":
             return int(item.get("count", 0))
         return sum(self._tree_count(child) for child in item.get("children", []))

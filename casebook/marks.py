@@ -8,12 +8,15 @@ from typing import Any
 
 
 class MarksStore:
-    def __init__(self, project_root: Path):
+    """Persist review marks separately from YAML test case definitions."""
+
+    def __init__(self, project_root: Path) -> None:
         self.project_root = project_root.resolve()
         self.path = self.project_root / ".casebook" / "marks.json"
         self._lock = RLock()
 
     def _load(self) -> dict[str, Any]:
+        """Load marks defensively so a bad file never breaks case browsing."""
         if not self.path.exists():
             return {}
         try:
@@ -23,6 +26,7 @@ class MarksStore:
         return data if isinstance(data, dict) else {}
 
     def _save(self, marks: dict[str, Any]) -> None:
+        """Write marks as readable JSON for Git review and manual inspection."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(
             json.dumps(marks, ensure_ascii=False, indent=2),
@@ -30,10 +34,12 @@ class MarksStore:
         )
 
     def all(self) -> dict[str, Any]:
+        """Return all review marks."""
         with self._lock:
             return self._load()
 
     def key(self, file_path: str, case_id: str) -> str:
+        """Build the canonical review mark key."""
         return f"{file_path}#{case_id}"
 
     def update_mark(
@@ -43,6 +49,7 @@ class MarksStore:
         needs_update: bool | None = None,
         notes: str | None = None,
     ) -> dict[str, Any]:
+        """Create, update, or delete one review mark based on its content."""
         with self._lock:
             marks = self._load()
             key = self.key(file_path, case_id)
@@ -63,14 +70,17 @@ class MarksStore:
             return {"key": key, "mark": marks.get(key), "marked": marked, "marks": marks}
 
     def toggle_needs_update(self, file_path: str, case_id: str) -> dict[str, Any]:
+        """Flip the needs_update flag while preserving any existing notes."""
         with self._lock:
             marks = self._load()
             key = self.key(file_path, case_id)
             current = marks.get(key)
-            marked = not bool(isinstance(current, dict) and current.get("needs_update"))
+            marked = not bool(isinstance(current, dict)
+                              and current.get("needs_update"))
         return self.update_mark(file_path, case_id, needs_update=marked)
 
     def remap_case_ids(self, file_path: str, mapping: list[dict[str, Any]]) -> dict[str, Any]:
+        """Move marks after a YAML case ID renumber operation."""
         id_map = {
             str(item.get("old_id") or ""): str(item.get("new_id") or "")
             for item in mapping

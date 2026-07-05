@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import atexit
 import json
 import queue
-import atexit
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, Response, jsonify, render_template, request, send_from_directory, stream_with_context
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    render_template,
+    request,
+    send_from_directory,
+    stream_with_context,
+)
+from flask.typing import ResponseReturnValue
 
 from . import __version__
 from .editor import CaseEditor, CaseNotFoundError, EditConflictError
@@ -18,7 +28,9 @@ from .watcher import CasebookWatcher
 
 
 class EventBroker:
-    def __init__(self):
+    """Small in-process pub/sub broker for browser live-reload events."""
+
+    def __init__(self) -> None:
         self._subscribers: list[queue.Queue[dict[str, Any]]] = []
 
     def subscribe(self) -> queue.Queue[dict[str, Any]]:
@@ -42,6 +54,7 @@ def create_app(
     scan_dirs: list[str] | None = None,
     watch: bool = True,
 ) -> Flask:
+    """Create the Casebook Flask app for one project and one scan scope."""
     app = Flask(__name__)
     store = CasebookStore(project_root=project_root, scan_dirs=scan_dirs)
     editor = CaseEditor(project_root=project_root)
@@ -54,6 +67,7 @@ def create_app(
     app.config["CASEBOOK_INITIAL_SUMMARY"] = initial_summary
 
     def current_case_keys() -> list[str]:
+        """Return canonical case keys for the currently loaded YAML scope."""
         keys: list[str] = []
         for file_item in store.list_files():
             file_path = str(file_item.get("path") or "")
@@ -69,15 +83,21 @@ def create_app(
         return keys
 
     def case_keys_for_run(run_id: str) -> list[str]:
+        """Resolve the cases that must be considered for a test plan."""
         data = runs.get_run(run_id, scope=store.scan_dirs)
         run = data.get("run") or {}
         if isinstance(run, dict):
             case_scope = run.get("case_scope")
             if isinstance(case_scope, list):
-                return [str(item or "") for item in case_scope if str(item or "").strip()]
+                return [
+                    str(item or "")
+                    for item in case_scope
+                    if str(item or "").strip()
+                ]
         return current_case_keys()
 
     def unresolved_case_keys(source_run_id: str) -> list[str]:
+        """Build a retest scope from failed, blocked, and deferred source cases."""
         source = runs.get_run(source_run_id, scope=store.scan_dirs)
         source_run = source.get("run") or {}
         if not isinstance(source_run, dict) or source_run.get("status") != "completed":
@@ -103,6 +123,7 @@ def create_app(
         return keys
 
     def refresh_and_publish(reason: str) -> dict[str, Any]:
+        """Refresh YAML data and notify connected browsers."""
         summary = store.refresh()
         broker.publish(
             {"type": "reload", "reason": reason, "summary": summary})
@@ -120,33 +141,33 @@ def create_app(
         atexit.register(watcher.stop)
 
     @app.after_request
-    def add_no_cache_headers(response):
+    def add_no_cache_headers(response: Response) -> Response:
         if request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         return response
 
     @app.route("/")
-    def index():
+    def index() -> ResponseReturnValue:
         return render_template("index.html", casebook_version=__version__)
 
     @app.get("/favicon.ico")
-    def favicon():
+    def favicon() -> ResponseReturnValue:
         return send_from_directory(app.static_folder, "favicon.svg", mimetype="image/svg+xml")
 
     @app.get("/api/summary")
-    def api_summary():
+    def api_summary() -> ResponseReturnValue:
         return jsonify(store.summary())
 
     @app.get("/api/tree")
-    def api_tree():
+    def api_tree() -> ResponseReturnValue:
         return jsonify(store.tree())
 
     @app.get("/api/files")
-    def api_files():
+    def api_files() -> ResponseReturnValue:
         return jsonify(store.list_files())
 
     @app.get("/api/files/<path:file_path>")
-    def api_file(file_path: str):
+    def api_file(file_path: str) -> ResponseReturnValue:
         entry = store.get_file(file_path)
         if not entry:
             return jsonify({"error": f"File not found: {file_path}"}), 404
@@ -166,7 +187,7 @@ def create_app(
         return jsonify(entry)
 
     @app.post("/api/files/<path:file_path>/renumber")
-    def api_renumber_file(file_path: str):
+    def api_renumber_file(file_path: str) -> ResponseReturnValue:
         payload = request.get_json(silent=True) or {}
         current_run_id = payload.get(
             "current_run_id") or payload.get("currentRunId")
@@ -196,11 +217,11 @@ def create_app(
         })
 
     @app.get("/api/marks")
-    def api_marks():
+    def api_marks() -> ResponseReturnValue:
         return jsonify(marks.all())
 
     @app.post("/api/marks/toggle")
-    def api_toggle_mark():
+    def api_toggle_mark() -> ResponseReturnValue:
         payload = request.get_json(silent=True) or {}
         file_path = str(payload.get("file_path")
                         or payload.get("filePath") or "")
@@ -217,7 +238,7 @@ def create_app(
         return jsonify(result)
 
     @app.patch("/api/marks")
-    def api_update_mark():
+    def api_update_mark() -> ResponseReturnValue:
         payload = request.get_json(silent=True) or {}
         file_path = str(payload.get("file_path")
                         or payload.get("filePath") or "")
@@ -247,11 +268,11 @@ def create_app(
         return jsonify(result)
 
     @app.get("/api/test-runs")
-    def api_test_runs():
+    def api_test_runs() -> ResponseReturnValue:
         return jsonify(runs.list_runs(scope=store.scan_dirs))
 
     @app.post("/api/test-runs")
-    def api_create_test_run():
+    def api_create_test_run() -> ResponseReturnValue:
         payload = request.get_json(silent=True) or {}
         mode = str(payload.get("mode") or "full").strip().lower()
         if mode == "retest":
@@ -291,14 +312,14 @@ def create_app(
         return jsonify(result), 201
 
     @app.get("/api/test-runs/<run_id>")
-    def api_test_run(run_id: str):
+    def api_test_run(run_id: str) -> ResponseReturnValue:
         try:
             return jsonify(runs.get_run(run_id, scope=store.scan_dirs))
         except RunNotFoundError:
             return jsonify({"error": f"Test run not found: {run_id}"}), 404
 
     @app.patch("/api/test-runs/<run_id>")
-    def api_complete_test_run(run_id: str):
+    def api_complete_test_run(run_id: str) -> ResponseReturnValue:
         payload = request.get_json(silent=True) or {}
         try:
             result = runs.complete_run(
@@ -320,7 +341,7 @@ def create_app(
         return jsonify(result)
 
     @app.patch("/api/test-runs/<run_id>/results")
-    def api_update_test_result(run_id: str):
+    def api_update_test_result(run_id: str) -> ResponseReturnValue:
         payload = request.get_json(silent=True) or {}
         file_path = str(payload.get("file_path")
                         or payload.get("filePath") or "")
@@ -353,7 +374,7 @@ def create_app(
         return jsonify(result)
 
     @app.patch("/api/cases")
-    def api_update_case():
+    def api_update_case() -> ResponseReturnValue:
         payload = request.get_json(silent=True) or {}
         file_path = str(payload.get("file_path") or "")
         case_id = str(payload.get("case_id") or "")
@@ -374,14 +395,14 @@ def create_app(
         return jsonify({"status": "ok", "result": result, "summary": summary})
 
     @app.route("/api/refresh", methods=["GET", "POST"])
-    def api_refresh():
+    def api_refresh() -> ResponseReturnValue:
         return jsonify(refresh_and_publish("manual"))
 
     @app.get("/api/events")
-    def api_events():
+    def api_events() -> ResponseReturnValue:
         subscriber = broker.subscribe()
 
-        def stream():
+        def stream() -> Iterator[str]:
             try:
                 yield "event: hello\ndata: {}\n\n"
                 while True:

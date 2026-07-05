@@ -13,11 +13,14 @@ CASE_ID_PATTERN = re.compile(r"^(?P<prefix>.+?)(?P<number>\d+)$")
 
 
 class CaseIdRenumberError(Exception):
+    """Raised when a YAML file cannot be safely renumbered."""
     pass
 
 
 class CaseIdRenumberer:
-    def __init__(self, project_root: Path):
+    """Renumber case IDs in-place while preserving YAML formatting."""
+
+    def __init__(self, project_root: Path) -> None:
         self.project_root = project_root.resolve()
         self.yaml = YAML(typ="rt")
         self.yaml.preserve_quotes = True
@@ -25,6 +28,7 @@ class CaseIdRenumberer:
         self.yaml.width = 4096
 
     def renumber_file(self, file_path: str, mtime_ns: int | str | None = None) -> dict[str, Any]:
+        """Renumber one YAML file from its first case ID and return an ID mapping."""
         try:
             target = resolve_project_path(self.project_root, file_path)
         except ValueError as exc:
@@ -47,7 +51,8 @@ class CaseIdRenumberer:
         first_id = str(first_case.get("id") or "").strip()
         match = CASE_ID_PATTERN.match(first_id)
         if not match:
-            raise CaseIdRenumberError(f"First case ID is not renumberable: {first_id or 'empty'}")
+            raise CaseIdRenumberError(
+                f"First case ID is not renumberable: {first_id or 'empty'}")
 
         prefix = match.group("prefix")
         start = int(match.group("number"))
@@ -55,9 +60,12 @@ class CaseIdRenumberer:
         mapping: list[dict[str, Any]] = []
         changed = 0
 
+        # The first ID defines both the textual prefix and the numeric width.
+        # This keeps inserted cases adjacent while restoring review-friendly IDs.
         for index, case in enumerate(test_cases):
             if not isinstance(case, dict):
-                raise CaseIdRenumberError(f"Case at position {index + 1} is not an object.")
+                raise CaseIdRenumberError(
+                    f"Case at position {index + 1} is not an object.")
             old_value = case.get("id", "")
             old_id = str(old_value or "").strip()
             new_id = f"{prefix}{start + index:0{width}d}"
@@ -84,11 +92,13 @@ class CaseIdRenumberer:
         }
 
     def _styled_id(self, old_value: Any, new_id: str) -> str:
+        """Preserve ruamel scalar subclasses such as quoted strings."""
         if isinstance(old_value, str) and type(old_value) is not str:
             return type(old_value)(new_id)
         return new_id
 
     def _display_path(self, target: Path) -> str:
+        """Return project-relative paths in CLI/API responses when possible."""
         try:
             return target.relative_to(self.project_root).as_posix()
         except ValueError:
