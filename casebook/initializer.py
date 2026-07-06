@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from importlib.abc import Traversable
 from importlib import resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 

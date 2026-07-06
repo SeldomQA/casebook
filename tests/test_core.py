@@ -9,6 +9,7 @@ from pathlib import Path
 from casebook.app import create_app
 from casebook.editor import CaseEditor, EditConflictError
 from casebook.exporter import generate_export
+from casebook.initializer import init_project
 from casebook.marks import MarksStore
 from casebook.renumber import CaseIdRenumberer
 from casebook.report import generate_report
@@ -77,6 +78,19 @@ def write_cases(project_root: Path, relative_path: str = "releases/login.yaml") 
 
 
 class CasebookCoreTests(unittest.TestCase):
+
+    def test_init_project_creates_scaffold_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir) / "my-casebook"
+            result = init_project(project_root)
+
+            self.assertEqual(result.project_root, project_root.resolve())
+            self.assertTrue((project_root / "docs" / "requirements" / "login.md").exists())
+            self.assertTrue((project_root / "releases" / "example" / "login.yaml").exists())
+            self.assertTrue((project_root / "schema" / "test-case-schema.json").exists())
+            self.assertIn(Path("docs/requirements/login.md"), result.created)
+            self.assertIn(Path("releases/example/login.yaml"), result.created)
+
     def test_scanner_builds_summary_tree_and_file_payload(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
