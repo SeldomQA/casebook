@@ -1,206 +1,214 @@
-我觉得这个想法很棒，而且方向很清楚。
+我读完 `docs/thinking.md` 后的判断是：Casebook 前 6 个版本已经把“用例资产怎么被查看、评审、执行、报告”这条链路打通了。下一阶段最值得做的，不是继续堆页面功能，而是往前推进一层：
 
-它真正厉害的地方不是“让 AI 生成测试用例”这么简单，而是你把整个链路闭合了：
+**让 AI 更可靠地理解需求。**
 
-`需求文档` → `AI 按规范生成 YAML 用例` → `schema 约束格式` → `Casebook 可视化查看/编辑` → `版本库沉淀`
-
-这确实很 AI-native。传统写用例是人在表格里逐条填；你的模式变成了：人维护规范、需求和评审判断，AI 负责批量结构化生成，Casebook 负责浏览、标记和修订。人的价值从“录入员”上移到“测试设计者/审稿人”。
-
-我建议把这个概念定义成两层：
-
-1. **项目脚手架**
-   命令可以叫：
-
-   ```bash
-   casebook init xxx
-   ```
-
-   生成：
-
-   ```text
-   xxx/
-     .vscode/settings.json
-     schema/test-case-schema.json
-     releases/example/login.yaml
-     docs/SKILL.md
-   ```
-
-2. **项目内 AI 规范包**
-   `docs/SKILL.md` 可以继续保留，但它的定位要明确：这是“给 AI 读的测试用例生成指南”。它和 `schema/test-case-schema.json` 是一对：  
-   - schema 约束“格式必须是什么”
-   - SKILL 解释“怎么理解需求、怎么设计用例、怎么写得像测试人员”
-
-我会把这个产品理念描述成：
-
-> Casebook 是一个 AI 时代的测试用例工作台：用 schema 固化格式，用 skill 固化测试思维，用 YAML 承载可版本化用例，用本地 Web UI 完成审阅和编辑。
-
-这不是小工具，是一个很有潜力的工作流。下一步最值得补的是：初始化命令、schema 校验命令、需求到用例的推荐目录约定，比如 `docs/requirements/*.md` → `releases/<version-or-module>/*.yaml`。
-
-
-```
-xxx/
-  AGENTS.md
-  CLAUDE.md
-  .agents/skills/casebook-test-cases/SKILL.md
-  docs/
-    requirements/
-  schema/test-case-schema.json
-  releases/example/login.yaml
-  .vscode/settings.json
-```
-
-
-
-2. 精细化的测试执行（Test Execution）
-
-既然有了 .casebook/marks.json，除了标记 needs_update，还可以扩展出执行状态。例如："status": "passed" | "failed" | "blocked"。
-
-
-这个方向非常关键，而且应该做成 Casebook 的第二个核心场景：
-
-- **评审场景**：查看、Mark、编辑用例。
-- **执行场景**：创建执行轮次，逐条记录执行结果，统计进度，生成报告依据。
-
-我建议把它设计成 **Execution Run（执行轮次）**，不要直接把执行状态写进 YAML 用例文件里。
-
-**核心概念**
-每一次测试执行都应该是一份独立记录：
+也就是从：
 
 ```text
-用例定义：releases/**/*.yaml
-执行记录：test-runs/<run-id>.json
-报告输出：reports/<run-id>.md 或 html
+需求文档 -> AI 生成 YAML 用例
 ```
 
-这样同一批用例可以在不同版本、环境、人员、时间下执行多次。用例本身保持干净，执行数据也能沉淀下来。
-
-**执行状态**
-建议第一版支持这些状态：
+升级成：
 
 ```text
-untested  未执行
-passed    通过
-failed    失败
-blocked   阻塞
-skipped   跳过
+原始需求 / Figma / API / 业务规则
+  -> 结构化需求理解
+  -> 测试策略与覆盖地图
+  -> AI 生成 YAML 用例
+  -> Casebook 评审、执行、报告
 ```
 
-你说的“通过/失败/都塞”，我理解这里的“都塞”应该是 **阻塞 blocked**：不是用例失败，而是因为环境、数据、依赖、权限、接口不可用等原因无法执行。
+**核心定位**
+Casebook 不应该变成“内置 AI 生成按钮的平台”。它更应该成为：
 
-**执行文件设计**
-推荐新增：
+> AI Agent 时代的测试资产工程基础设施：负责把需求、设计稿、接口文档、测试策略、用例、执行证据组织成 AI 可读、人可审、Git 可追踪的工程资产。
+
+也就是说，模型负责推理，Casebook 负责给模型准备好高质量上下文。
+
+**建议路线图**
+
+**0.7.0：需求标准化能力**
+
+目标：把模糊 PRD 变成 AI 容易理解的结构化需求。
+
+建议新增：
 
 ```text
-test-runs/
-  2026-06-24-login-smoke.json
-schema/
-  test-run-schema.json
+docs/requirements/raw/         原始需求材料
+docs/requirements/<feature>.md 标准化需求文档
+schema/requirement-schema.json 需求结构约束
 ```
 
-执行文件大概长这样：
+标准化需求文档建议包含：
 
-```json
-{
-  "run": {
-    "id": "RUN_20260624_LOGIN_SMOKE",
-    "name": "登录冒烟测试",
-    "environment": "staging",
-    "build": "v1.0.0",
-    "tester": "henry.hu",
-    "status": "in_progress",
-    "started_at": "2026-06-24T10:00:00+08:00",
-    "completed_at": null,
-    "scope": ["releases/example/login.yaml"]
-  },
-  "results": {
-    "releases/example/login.yaml#TC_LOGIN_001": {
-      "status": "passed",
-      "executed_at": "2026-06-24T10:10:00+08:00",
-      "tester": "henry.hu",
-      "notes": "",
-      "defects": []
-    },
-    "releases/example/login.yaml#TC_LOGIN_002": {
-      "status": "failed",
-      "executed_at": "2026-06-24T10:15:00+08:00",
-      "tester": "henry.hu",
-      "notes": "错误提示文案与需求不一致",
-      "defects": ["BUG-123"]
-    }
-  }
-}
+- 背景与目标
+- 用户角色
+- 功能范围
+- 不做什么
+- 业务规则
+- 页面/入口
+- 字段规则
+- 状态流转
+- 权限规则
+- 异常场景
+- 验收标准
+- 未确认问题
+- Figma / API / Jira 引用
+
+配套命令可以是：
+
+```bash
+casebook requirement new login
+casebook requirement check docs/requirements/login.md
+casebook context docs/requirements/login.md
 ```
 
-后续生成报告时，就可以同时读取：
+其中 `casebook context` 很关键：它不调用模型，而是生成一份 AI Agent 可以直接读取的上下文包，里面聚合需求、schema、skill、已有 YAML、相关设计引用。
+
+**0.8.0：Figma / 设计稿理解能力**
+
+目标：让 UI 需求不再只是“贴一个 Figma 链接”，而是转成测试人员可用的信息。
+
+建议先不要做复杂的 Figma 渲染平台，先做轻量结构化：
 
 ```text
-releases/        用例定义
-test-runs/       执行结果
+docs/designs/login.md
 ```
 
-**UI 规划**
-Casebook 可以新增一个执行模式：
+内容包括：
+
+- Figma 链接
+- 页面/Frame 名称
+- 核心组件
+- 字段与校验
+- 默认态、加载态、空态、错误态、禁用态
+- 弹窗、Toast、确认框
+- 权限可见性
+- 响应式要求
+- 可访问性注意点
+- 与需求规则的对应关系
+
+配套命令可以是：
+
+```bash
+casebook design scan docs/requirements/login.md
+casebook design new login --figma <url>
+```
+
+第一阶段只需要识别和索引 Figma URL，生成设计理解模板。后续再考虑接 Figma MCP，把 Frame 信息、截图、节点文本提取出来。
+
+**0.9.0：需求覆盖与追踪**
+
+目标：让 Casebook 能回答三个问题：
+
+- 哪些需求已经有用例覆盖？
+- 哪些需求没有覆盖？
+- 哪些用例找不到需求依据？
+
+这里有两种方案：
+
+方案 A：在 YAML 用例中增加字段，例如：
+
+```yaml
+requirement_refs: [REQ_LOGIN_001]
+design_refs: [FIGMA_LOGIN_FORM]
+```
+
+方案 B：不污染 YAML，用独立文件维护映射：
 
 ```text
-Review Mode      当前已有：查看、标记、编辑
-Execution Mode   新增：执行、记录结果、统计进度
+.casebook/trace.json
 ```
 
-执行模式里建议有这些功能：
+我更建议第一阶段用方案 B。因为当前 YAML schema 很克制，先把追踪能力做在外部，风险更小。等模型和团队习惯稳定后，再决定是否把 `requirement_refs` 纳入正式 schema。
 
-- 顶部选择或创建一个执行轮次。
-- 显示执行进度条：`已执行 / 总数`。
-- 显示统计卡片：通过、失败、阻塞、跳过、未执行。
-- 每条用例行上增加状态按钮：Pass / Fail / Block / Skip。
-- 点击失败或阻塞时，允许填写备注、缺陷链接、阻塞原因。
-- 支持按状态过滤：只看失败、只看阻塞、只看未执行。
-- 支持完成执行轮次，生成报告数据。
+配套命令：
 
-**进度统计**
-统计可以实时计算，不一定要写死在文件里：
+```bash
+casebook coverage docs/requirements/login.md releases/v1-auth
+```
+
+输出：
+
+- 需求总数
+- 已覆盖需求
+- 未覆盖需求
+- 无需求来源的用例
+- 只覆盖 happy path 的需求
+- 缺少异常/边界/权限/状态覆盖的需求
+
+**1.0.0：测试策略生成与质量门禁**
+
+目标：AI 不只是生成用例，而是先生成测试策略。
+
+在生成 YAML 之前，先产出：
 
 ```text
-总数 = 当前 run scope 覆盖的用例数
-已执行 = passed + failed + blocked + skipped
-进度 = 已执行 / 总数
-通过率 = passed / 已执行
-失败率 = failed / 已执行
+docs/strategies/login.md
 ```
 
-页面可以展示：
+内容包括：
+
+- 测试范围
+- 风险分级
+- 测试层级建议：API / UI / E2E / 手工
+- P0/P1/P2 分布预期
+- 冒烟用例建议
+- 自动化建议
+- 不值得写成用例的检查项
+- 需要产品确认的问题
+
+然后再由 AI 根据策略生成用例。
+
+这一步会让 Casebook 从“用例工作台”升级成“测试设计工作台”。
+
+**1.1.0：评审反馈反哺 AI**
+
+现在 Casebook 已经有 Mark 和 Notes。下一步可以把这些评审意见变成 AI 修复任务。
+
+命令可以是：
+
+```bash
+casebook prompt marks releases/v1-auth
+```
+
+生成一段给 AI Agent 的修复提示：
 
 ```text
-Progress: 16 / 42
-Passed: 12
-Failed: 2
-Blocked: 1
-Skipped: 1
-Untested: 26
+请根据以下 Casebook 评审意见修改 YAML 用例：
+- TC_LOGIN_003: 预期结果不够可验证
+- TC_LOGIN_006: 缺少权限异常场景
+- TC_LOGIN_009: 与 REQ_LOGIN_004 重复
 ```
 
-**建议开发阶段**
-我建议分三期做。
+这非常符合 Casebook 的理念：页面负责评审，AI 负责维护。
 
-第一期：最小可用执行功能
+**我建议的优先级**
 
-- 新增 `test-runs/*.json` 存储。
-- 新增创建/选择执行轮次。
-- 用例行支持设置 passed / failed / blocked / skipped。
-- 顶部显示进度条和统计。
-- 支持备注和缺陷链接。
+第一优先级：`casebook context`
 
-第二期：报告能力
+这是最小但最关键的能力。它能把需求、skill、schema、已有用例打包成 AI 可读上下文，直接提升 AI 生成质量。
 
-- 新增 `casebook report <run-file>` 命令。
-- 输出 Markdown 或 HTML 测试报告。
-- 报告包含执行概览、失败用例、阻塞用例、缺陷列表。
+第二优先级：标准化需求模板 + `casebook requirement check`
 
-第三期：执行体验增强
+先把需求写法规范住。需求质量上来了，用例质量才会稳定。
 
-- 批量设置状态。
-- 键盘快捷操作。
-- 执行人、环境、版本管理。
-- 用例变更后提示当前 run 的快照可能过期。
-- 支持附件或截图路径。
+第三优先级：Figma 链接识别 + 设计理解模板
 
-我建议下一步先设计 **test-run-schema.json** 和第一版 UI 草图。这个功能一旦做完，Casebook 就不只是“用例评审工具”，而是完整覆盖 **生成、评审、编辑、执行、报告** 的测试用例工作台了。
+先解决“Figma 链接只是链接，AI 不一定知道该看什么”的问题。
+
+第四优先级：coverage / trace
+
+等需求 ID、设计 ID、用例 ID 都稳定后，再做覆盖分析。
+
+**不建议现在做的事**
+
+- 不建议做平台式“上传需求，一键生成用例”。
+- 不建议一开始深度集成 Figma API，容易变重。
+- 不建议马上做复杂 Regression selection 树。
+- 不建议把 Casebook 变成需求管理系统。
+- 不建议把所有 AI 能力都内置到 Casebook 命令里。
+
+Casebook 最强的方向仍然是：让 AI Agent 在工程项目里工作，让需求、设计、用例、执行记录都变成可追踪的工程资产。
+
+我建议下一步就定为 **0.7.0：Requirement Context Pack**。先实现 `casebook context`、标准化需求模板、需求检查清单和文档更新。这一步小，但会把 Casebook 从“AI 生成用例后的工作台”，推进到“AI 理解需求前的基础设施”。
