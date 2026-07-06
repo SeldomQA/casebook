@@ -91,6 +91,17 @@ class CasebookCoreTests(unittest.TestCase):
             self.assertIn(Path("docs/requirements/login.md"), result.created)
             self.assertIn(Path("releases/example/login.yaml"), result.created)
 
+    def test_scanner_normalizes_backslash_scan_dirs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            write_cases(project_root)
+
+            store = CasebookStore(project_root, scan_dirs=[r"releases\\"])
+            summary = store.refresh()
+
+            self.assertEqual(summary["files"], 1)
+            self.assertEqual(summary["cases"], 3)
+
     def test_scanner_builds_summary_tree_and_file_payload(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
