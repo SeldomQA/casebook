@@ -15,7 +15,7 @@ def normalize_scan_dirs(project_root: Path, scan_dirs: list[str] | None) -> list
     """Normalize user-provided scan directories and keep legacy release/ paths working."""
     normalized: list[str] = []
     for raw_dir in scan_dirs or []:
-        value = str(raw_dir).strip().rstrip("/\\")
+        value = str(raw_dir).strip().rstrip("/\\").replace("\\", "/")
         if not value:
             continue
         if value.startswith("release/") and not (project_root / value).exists():
@@ -34,7 +34,7 @@ def relative_path(project_root: Path, path: Path) -> str:
 
 def resolve_project_path(project_root: Path, rel_path: str) -> Path:
     """Resolve a project-relative path and reject path traversal."""
-    candidate = (project_root / rel_path).resolve()
+    candidate = (project_root / str(rel_path).replace("\\", "/")).resolve()
     root = project_root.resolve()
     if candidate != root and root not in candidate.parents:
         raise ValueError("Path escapes project root")
