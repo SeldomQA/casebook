@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import textwrap
@@ -85,9 +86,12 @@ class CasebookCoreTests(unittest.TestCase):
             result = init_project(project_root)
 
             self.assertEqual(result.project_root, project_root.resolve())
-            self.assertTrue((project_root / "docs" / "requirements" / "login.md").exists())
-            self.assertTrue((project_root / "releases" / "example" / "login.yaml").exists())
-            self.assertTrue((project_root / "schema" / "test-case-schema.json").exists())
+            self.assertTrue(
+                (project_root / "docs" / "requirements" / "login.md").exists())
+            self.assertTrue((project_root / "releases" /
+                            "example" / "login.yaml").exists())
+            self.assertTrue((project_root / "schema" /
+                            "test-case-schema.json").exists())
             self.assertIn(Path("docs/requirements/login.md"), result.created)
             self.assertIn(Path("releases/example/login.yaml"), result.created)
 
@@ -164,7 +168,8 @@ class CasebookCoreTests(unittest.TestCase):
             )
             self.assertTrue(result["marked"])
 
-            toggled = store.toggle_needs_update("releases/login.yaml", "TC_LOGIN_004")
+            toggled = store.toggle_needs_update(
+                "releases/login.yaml", "TC_LOGIN_004")
             self.assertFalse(toggled["marked"])
             self.assertEqual(toggled["mark"]["notes"], "Add boundary case")
 
@@ -185,7 +190,8 @@ class CasebookCoreTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            result = CaseIdRenumberer(project_root).renumber_file("releases/login.yaml")
+            result = CaseIdRenumberer(
+                project_root).renumber_file("releases/login.yaml")
             rewritten = yaml_file.read_text(encoding="utf-8")
 
             self.assertEqual(result["total"], 3)
@@ -201,15 +207,24 @@ class CasebookCoreTests(unittest.TestCase):
                 "releases/login.yaml#TC_LOGIN_001",
                 "releases/login.yaml#TC_LOGIN_002",
             ]
-            run = store.create_run(name="Round 1", scope=["releases"], case_scope=case_keys)
+            run = store.create_run(name="Round 1", scope=[
+                                   "releases"], case_scope=case_keys)
             run_id = run["run"]["id"]
 
-            store.update_result(run_id, "releases/login.yaml", "TC_LOGIN_001", status="passed")
+            store.update_result(run_id, "releases/login.yaml",
+                                "TC_LOGIN_001", status="passed")
+            store.update_result(
+                run_id,
+                "releases/login.yaml",
+                "TC_LOGIN_001",
+                actual_result="Dashboard opened for qa.owner",
+            )
             with self.assertRaises(InvalidRunError):
                 store.complete_run(run_id, required_case_keys=case_keys)
 
             with self.assertRaises(InvalidRunError):
-                store.update_result(run_id, "releases/login.yaml", "TC_LOGIN_999", status="passed")
+                store.update_result(
+                    run_id, "releases/login.yaml", "TC_LOGIN_999", status="passed")
 
             store.update_result(
                 run_id,
@@ -218,11 +233,16 @@ class CasebookCoreTests(unittest.TestCase):
                 status="deferred",
                 defects="BUG-1\nhttps://jira.example/browse/BUG-2",
             )
-            completed = store.complete_run(run_id, required_case_keys=case_keys)
+            completed = store.complete_run(
+                run_id, required_case_keys=case_keys)
             self.assertEqual(completed["run"]["status"], "completed")
             self.assertEqual(completed["run"]["case_scope"], case_keys)
+            result = completed["results"]["releases/login.yaml#TC_LOGIN_001"]
+            self.assertEqual(result["actual_result"],
+                             "Dashboard opened for qa.owner")
             self.assertEqual(
-                store.list_runs(scope=["releases"])[0]["result_counts"]["deferred"],
+                store.list_runs(scope=["releases"])[
+                    0]["result_counts"]["deferred"],
                 1,
             )
 
@@ -256,7 +276,8 @@ class CasebookCoreTests(unittest.TestCase):
                     "status": "failed",
                 },
             )
-            incomplete = client.patch(f"/api/test-runs/{first_run_id}", json={})
+            incomplete = client.patch(
+                f"/api/test-runs/{first_run_id}", json={})
             self.assertEqual(incomplete.status_code, 400)
 
             client.patch(
@@ -287,6 +308,57 @@ class CasebookCoreTests(unittest.TestCase):
                     "releases/login.yaml#TC_LOGIN_002",
                 ],
             )
+
+    def test_app_uploads_execution_screenshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            write_cases(project_root)
+            app = create_app(project_root, scan_dirs=["releases"], watch=False)
+            client = app.test_client()
+
+            created = client.post(
+                "/api/test-runs",
+                json={"name": "Round 1", "mode": "full"},
+            )
+            run_id = created.get_json()["run"]["id"]
+            upload = client.post(
+                f"/api/test-runs/{run_id}/results/screenshots",
+                data={
+                    "file_path": "releases/login.yaml",
+                    "case_id": "TC_LOGIN_001",
+                    "screenshot": (
+                        io.BytesIO(b"fake image bytes"),
+                        "actual-result.png",
+                    ),
+                },
+                content_type="multipart/form-data",
+            )
+
+            self.assertEqual(upload.status_code, 201)
+            result = upload.get_json()["result"]
+            screenshot = result["screenshots"][0]
+            self.assertEqual(screenshot["name"], "actual-result.png")
+            screenshot_path = project_root / "test-runs" / \
+                "screenshots" / run_id / screenshot["stored_name"]
+            self.assertTrue(screenshot_path.exists())
+            self.assertEqual(
+                screenshot["path"],
+                f"test-runs/screenshots/{run_id}/{screenshot['stored_name']}",
+            )
+
+            preview = client.get(
+                f"/api/test-runs/{run_id}/screenshots/{screenshot['id']}"
+            )
+            self.assertEqual(preview.status_code, 200)
+            self.assertEqual(preview.data, b"fake image bytes")
+            preview.close()
+
+            deleted = client.delete(
+                f"/api/test-runs/{run_id}/screenshots/{screenshot['id']}"
+            )
+            self.assertEqual(deleted.status_code, 200)
+            self.assertFalse(screenshot_path.exists())
+            self.assertEqual(deleted.get_json()["result"]["screenshots"], [])
 
     def test_export_and_report_generate_html_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -328,7 +400,15 @@ class CasebookCoreTests(unittest.TestCase):
                             "releases/login.yaml#TC_LOGIN_004": {
                                 "status": "failed",
                                 "notes": "Wrong message",
+                                "actual_result": "The page shows a generic error",
                                 "defects": ["https://jira.example/browse/BUG-1"],
+                                "screenshots": [
+                                    {
+                                        "id": "shot-1",
+                                        "name": "failure.png",
+                                        "stored_name": "shot-1.png",
+                                    }
+                                ],
                             },
                         },
                     },
@@ -345,6 +425,8 @@ class CasebookCoreTests(unittest.TestCase):
             self.assertIn("Casebook Test Report", report_html)
             self.assertIn("Failed Cases", report_html)
             self.assertIn("Wrong password is rejected", report_html)
+            self.assertIn("The page shows a generic error", report_html)
+            self.assertIn("failure.png", report_html)
             self.assertNotIn("Locked user is blocked", report_html)
 
 
