@@ -189,6 +189,18 @@
     </div>
   </aside>
   <div class="scrim" id="drawerScrim" hidden></div>
+  <div class="screenshot-viewer" id="screenshotViewer" hidden>
+    <button class="screenshot-viewer-backdrop" id="screenshotViewerBackdrop" type="button"
+      aria-label="Close screenshot preview"></button>
+    <div class="screenshot-viewer-dialog" role="dialog" aria-modal="true" aria-label="Screenshot preview">
+      <div class="screenshot-viewer-header">
+        <strong id="screenshotViewerTitle">Screenshot</strong>
+        <button class="drawer-close-button" id="screenshotViewerClose" type="button"
+          aria-label="Close screenshot preview"></button>
+      </div>
+      <img id="screenshotViewerImage" alt="Execution screenshot preview">
+    </div>
+  </div>
   <div class="toast" id="toast" hidden></div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>

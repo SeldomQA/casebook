@@ -45,7 +45,9 @@ class CaseRecord:
     case_type: str
     status: str
     notes: str
+    actual_result: str
     defects: list[str]
+    screenshots: list[dict[str, Any]]
     executed_at: str
 
 
@@ -227,9 +229,11 @@ def render_report_html(data: dict[str, Any]) -> str:
     .priority-p1 {{ color: #996900; background: #fff1cc; }}
     .priority-p2 {{ color: #007c82; background: #dff8fa; }}
     .notes {{ max-width: 360px; white-space: pre-wrap; color: #394253; }}
+    .actual-result {{ max-width: 360px; white-space: pre-wrap; color: #394253; }}
     .defects {{ max-width: 280px; color: #394253; }}
     .defects a {{ color: #0759b8; font-weight: 800; text-decoration: none; word-break: break-all; }}
     .defects a:hover {{ text-decoration: underline; }}
+    .screenshots {{ max-width: 240px; color: #394253; }}
     .empty {{ padding: 26px 30px; color: var(--muted); font-weight: 700; }}
     @media (max-width: 980px) {{
       .stats-grid {{ grid-template-columns: repeat(2, minmax(120px, 1fr)); }}
@@ -391,7 +395,9 @@ def _record_from_case(
         case_type=str(case.get("type") or ""),
         status=status,
         notes=str(result.get("notes") or ""),
+        actual_result=str(result.get("actual_result") or ""),
         defects=_normalize_defects(result.get("defects")),
+        screenshots=_normalize_screenshots(result.get("screenshots")),
         executed_at=str(result.get("executed_at") or ""),
     )
 
@@ -474,7 +480,7 @@ def _case_table(title: str, records: list[CaseRecord]) -> str:
           <h2>{_html(title)}</h2>
           <span>{len(records)} cases</span>
         </div>
-        {f'<table><thead><tr><th>Case</th><th>Title</th><th>Priority</th><th>File</th><th>Notes</th><th>Defects</th><th>Executed At</th></tr></thead><tbody>{rows}</tbody></table>' if rows else body}
+        {f'<table><thead><tr><th>Case</th><th>Title</th><th>Priority</th><th>File</th><th>Notes</th><th>Actual Result</th><th>Defects</th><th>Screenshots</th><th>Executed At</th></tr></thead><tbody>{rows}</tbody></table>' if rows else body}
       </div>
     """
 
@@ -489,7 +495,9 @@ def _case_row(record: CaseRecord) -> str:
         <td><span class="priority {priority_class}">{_html(record.priority)}</span></td>
         <td>{_html(record.file_path)}</td>
         <td class="notes">{_html(record.notes or "-")}</td>
+        <td class="actual-result">{_html(record.actual_result or "-")}</td>
         <td class="defects">{_defects_html(record.defects)}</td>
+        <td class="screenshots">{_screenshots_text(record.screenshots)}</td>
         <td>{_html(record.executed_at or "-")}</td>
       </tr>
     """
@@ -506,6 +514,20 @@ def _normalize_defects(value: Any) -> list[str]:
     return [str(item).strip() for item in items if str(item).strip()]
 
 
+def _normalize_screenshots(value: Any) -> list[dict[str, Any]]:
+    """Accept screenshot metadata from run JSON."""
+    if not isinstance(value, list):
+        return []
+    screenshots: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        screenshot_id = str(item.get("id") or "").strip()
+        if screenshot_id:
+            screenshots.append(item)
+    return screenshots
+
+
 def _defects_html(defects: list[str]) -> str:
     """Render defect IDs and links with safe escaping."""
     if not defects:
@@ -518,6 +540,16 @@ def _defects_html(defects: list[str]) -> str:
         else:
             items.append(_html(defect))
     return "<br>".join(items)
+
+
+def _screenshots_text(screenshots: list[dict[str, Any]]) -> str:
+    """Render screenshot names without assuming report-relative image paths."""
+    if not screenshots:
+        return "-"
+    return "<br>".join(
+        _html(str(item.get("name") or item.get("stored_name") or item.get("id") or "Screenshot"))
+        for item in screenshots
+    )
 
 
 def _legend(rows: list[dict[str, Any]]) -> str:

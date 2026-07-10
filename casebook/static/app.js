@@ -77,6 +77,11 @@ function bindElements() {
     "noResults",
     "editorDrawer",
     "drawerScrim",
+    "screenshotViewer",
+    "screenshotViewerBackdrop",
+    "screenshotViewerClose",
+    "screenshotViewerTitle",
+    "screenshotViewerImage",
     "closeDrawerButton",
     "drawerTitle",
     "caseForm",
@@ -144,6 +149,27 @@ function bindEvents() {
     updateExecutionStatus(executionSelect.dataset.caseId, executionSelect.value);
   });
   els.caseRows.addEventListener("click", (event) => {
+    const deleteScreenshotButton = event.target.closest("button[data-delete-screenshot]");
+    if (deleteScreenshotButton) {
+      event.stopPropagation();
+      deleteExecutionScreenshot(deleteScreenshotButton.dataset.screenshotId);
+      return;
+    }
+    const screenshotPreviewButton = event.target.closest("button[data-screenshot-preview]");
+    if (screenshotPreviewButton) {
+      event.stopPropagation();
+      openScreenshotViewer(
+        screenshotPreviewButton.dataset.src,
+        screenshotPreviewButton.dataset.name || "Screenshot",
+      );
+      return;
+    }
+    const uploadScreenshotButton = event.target.closest("button[data-upload-screenshot]");
+    if (uploadScreenshotButton) {
+      event.stopPropagation();
+      uploadExecutionScreenshot(uploadScreenshotButton.dataset.caseId);
+      return;
+    }
     const executionSelect = event.target.closest("select[data-exec-select]");
     if (executionSelect) {
       event.stopPropagation();
@@ -178,6 +204,8 @@ function bindEvents() {
   });
   els.closeDrawerButton.addEventListener("click", closeDrawer);
   els.drawerScrim.addEventListener("click", closeDrawer);
+  els.screenshotViewerBackdrop.addEventListener("click", closeScreenshotViewer);
+  els.screenshotViewerClose.addEventListener("click", closeScreenshotViewer);
   els.saveCaseButton.addEventListener("click", saveCase);
   els.caseForm.addEventListener("input", () => {
     state.dirty = true;
@@ -185,6 +213,11 @@ function bindEvents() {
   window.addEventListener("hashchange", () => {
     const path = decodeURIComponent(window.location.hash.replace(/^#/, ""));
     if (path && path !== state.currentFile) loadFile(path);
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !els.screenshotViewer.hidden) {
+      closeScreenshotViewer();
+    }
   });
 }
 
@@ -298,9 +331,13 @@ async function refreshAll() {
 }
 
 async function api(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
+  const headers = isFormData
+    ? (options.headers || {})
+    : { "Content-Type": "application/json", ...(options.headers || {}) };
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
+    headers,
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -798,10 +835,15 @@ function renderReviewDetails(caseItem) {
 function renderExecutionDetails(caseItem) {
   const result = executionResult(caseItem.id) || {};
   const defects = Array.isArray(result.defects) ? result.defects.join("\n") : (result.defects || "");
+  const screenshots = Array.isArray(result.screenshots) ? result.screenshots : [];
   return `
     <section class="detail-section execution-detail-section">
       <h5>${detailIcon("Execution")}<span>Execution</span></h5>
       <div class="execution-detail-grid">
+        <label>
+          <span>Actual Result</span>
+          <textarea data-exec-actual-result="${escapeAttr(caseItem.id)}" rows="3" placeholder="Actual result observed during execution">${escapeHtml(result.actual_result || "")}</textarea>
+        </label>
         <label>
           <span>Notes</span>
           <textarea data-exec-notes="${escapeAttr(caseItem.id)}" rows="3" placeholder="Execution notes">${escapeHtml(result.notes || "")}</textarea>
@@ -810,9 +852,39 @@ function renderExecutionDetails(caseItem) {
           <span>Defects</span>
           <textarea data-exec-defects="${escapeAttr(caseItem.id)}" rows="2" placeholder="Bug links or defect IDs, one per line">${escapeHtml(defects)}</textarea>
         </label>
+        <div class="execution-screenshot-field">
+          <span>Screenshots</span>
+          <div class="screenshot-upload-row">
+            <input data-exec-screenshot="${escapeAttr(caseItem.id)}" type="file" accept="image/png,image/jpeg,image/gif,image/webp">
+            <button class="outline-button screenshot-upload-button" type="button" data-upload-screenshot="1" data-case-id="${escapeAttr(caseItem.id)}"${state.currentRun ? "" : " disabled"}>Upload screenshot</button>
+          </div>
+          ${renderScreenshotList(screenshots)}
+        </div>
         <button class="outline-button execution-save-button" type="button" data-save-execution="1" data-case-id="${escapeAttr(caseItem.id)}"${state.currentRun ? "" : " disabled"}>Save execution</button>
       </div>
     </section>`;
+}
+
+function renderScreenshotList(screenshots) {
+  if (!screenshots.length) {
+    return `<div class="screenshot-list empty">No screenshots</div>`;
+  }
+  return `
+    <div class="screenshot-list">
+      ${screenshots.map((screenshot) => {
+    const src = screenshotUrl(screenshot);
+    const name = screenshot.name || "Screenshot";
+    const screenshotId = screenshot.id || "";
+    return `
+          <div class="screenshot-thumb-wrap">
+            <button class="screenshot-thumb" type="button" data-screenshot-preview="1" data-src="${escapeAttr(src)}" data-name="${escapeAttr(name)}" title="${escapeAttr(name)}">
+              <img src="${escapeAttr(src)}" alt="${escapeAttr(name)}">
+              <span>${escapeHtml(name)}</span>
+            </button>
+            <button class="screenshot-delete-button" type="button" data-delete-screenshot="1" data-screenshot-id="${escapeAttr(screenshotId)}" aria-label="Delete screenshot">×</button>
+          </div>`;
+  }).join("")}
+    </div>`;
 }
 
 function renderDetailList(title, items, ordered) {
@@ -1117,6 +1189,7 @@ async function saveExecutionDetails(caseId) {
     return;
   }
   const notes = document.querySelector(`[data-exec-notes="${cssEscape(caseId)}"]`)?.value || "";
+  const actualResult = document.querySelector(`[data-exec-actual-result="${cssEscape(caseId)}"]`)?.value || "";
   const defects = document.querySelector(`[data-exec-defects="${cssEscape(caseId)}"]`)?.value || "";
   const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}/results`, {
     method: "PATCH",
@@ -1124,6 +1197,7 @@ async function saveExecutionDetails(caseId) {
       file_path: state.currentData.path,
       case_id: caseId,
       notes,
+      actual_result: actualResult,
       defects: arrayFromText(defects),
     }),
   });
@@ -1132,6 +1206,58 @@ async function saveExecutionDetails(caseId) {
   renderExecutionPanel();
   renderCaseRows();
   showToast("Execution details saved");
+}
+
+async function uploadExecutionScreenshot(caseId) {
+  if (!state.currentData || !caseId) return;
+  if (!state.currentRunId) {
+    showToast("Select or create a test plan first");
+    return;
+  }
+  const input = document.querySelector(`[data-exec-screenshot="${cssEscape(caseId)}"]`);
+  const file = input?.files?.[0];
+  if (!file) {
+    showToast("Choose a screenshot first");
+    return;
+  }
+  const body = new FormData();
+  body.append("file_path", state.currentData.path);
+  body.append("case_id", caseId);
+  body.append("screenshot", file);
+  try {
+    const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}/results/screenshots`, {
+      method: "POST",
+      body,
+    });
+    state.currentRun = response.run;
+    state.runs = await api("/api/test-runs");
+    renderExecutionPanel();
+    renderCaseRows();
+    showToast("Screenshot uploaded");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    if (input) input.value = "";
+  }
+}
+
+async function deleteExecutionScreenshot(screenshotId) {
+  if (!screenshotId || !state.currentRunId) return;
+  const confirmed = window.confirm("Delete this screenshot?");
+  if (!confirmed) return;
+  try {
+    const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}/screenshots/${encodeURIComponent(screenshotId)}`, {
+      method: "DELETE",
+    });
+    state.currentRun = response.run;
+    state.runs = await api("/api/test-runs");
+    closeScreenshotViewer();
+    renderExecutionPanel();
+    renderCaseRows();
+    showToast("Screenshot deleted");
+  } catch (error) {
+    showToast(error.message);
+  }
 }
 
 function defaultRunName() {
@@ -1177,6 +1303,23 @@ function countNeedsUpdate() {
 
 function markKey(filePath, caseId) {
   return `${filePath}#${caseId}`;
+}
+
+function screenshotUrl(screenshot) {
+  if (!state.currentRunId || !screenshot?.id) return "";
+  return `/api/test-runs/${encodeURIComponent(state.currentRunId)}/screenshots/${encodeURIComponent(screenshot.id)}`;
+}
+
+function openScreenshotViewer(src, title) {
+  if (!src) return;
+  els.screenshotViewerImage.src = src;
+  els.screenshotViewerTitle.textContent = title || "Screenshot";
+  els.screenshotViewer.hidden = false;
+}
+
+function closeScreenshotViewer() {
+  els.screenshotViewer.hidden = true;
+  els.screenshotViewerImage.removeAttribute("src");
 }
 
 function reviewMark(caseId) {

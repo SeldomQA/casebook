@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import json
 import queue
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from flask import (
     stream_with_context,
 )
 from flask.typing import ResponseReturnValue
+from werkzeug.utils import secure_filename
 
 from . import __version__
 from .editor import CaseEditor, CaseNotFoundError, EditConflictError
@@ -25,6 +27,15 @@ from .renumber import CaseIdRenumberError, CaseIdRenumberer
 from .runs import InvalidRunError, RunNotFoundError, TestRunStore
 from .scanner import CasebookStore
 from .watcher import CasebookWatcher
+
+SCREENSHOT_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+SCREENSHOT_MIME_TYPES = {
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
 
 
 class EventBroker:
@@ -128,6 +139,44 @@ def create_app(
         broker.publish(
             {"type": "reload", "reason": reason, "summary": summary})
         return summary
+
+    def screenshot_directory(run_id: str) -> Path:
+        """Return the local screenshot directory for one test plan."""
+        return store.project_root / "test-runs" / "screenshots" / run_id
+
+    def legacy_screenshot_directory(run_id: str) -> Path:
+        """Return the pre-0.7 screenshot directory for compatibility."""
+        return store.project_root / ".casebook" / "screenshots" / run_id
+
+    def screenshot_file_path(run_id: str, stored_name: str) -> Path:
+        """Resolve a screenshot file, preferring the current test-runs location."""
+        current = screenshot_directory(run_id) / stored_name
+        if current.exists():
+            return current
+        return legacy_screenshot_directory(run_id) / stored_name
+
+    def find_screenshot(data: dict[str, Any], screenshot_id: str) -> dict[str, Any] | None:
+        """Find screenshot metadata across all execution results in a run."""
+        results = data.get("results") or {}
+        if not isinstance(results, dict):
+            return None
+        for result in results.values():
+            if not isinstance(result, dict):
+                continue
+            screenshots = result.get("screenshots") or []
+            if not isinstance(screenshots, list):
+                continue
+            for screenshot in screenshots:
+                if isinstance(screenshot, dict) and screenshot.get("id") == screenshot_id:
+                    return screenshot
+        return None
+
+    def split_result_key(key: str) -> tuple[str, str]:
+        """Split a canonical file#case execution result key."""
+        if "#" not in key:
+            return "", ""
+        file_path, case_id = key.rsplit("#", 1)
+        return file_path, case_id
 
     watcher: CasebookWatcher | None = None
     if watch:
@@ -355,6 +404,8 @@ def create_app(
                 case_id=case_id,
                 status=payload.get("status"),
                 notes=payload.get("notes") if "notes" in payload else None,
+                actual_result=payload.get(
+                    "actual_result") if "actual_result" in payload else None,
                 defects=payload.get(
                     "defects") if "defects" in payload else None,
                 tester=payload.get("tester") if "tester" in payload else None,
@@ -372,6 +423,115 @@ def create_app(
             "case_id": case_id,
         })
         return jsonify(result)
+
+    @app.post("/api/test-runs/<run_id>/results/screenshots")
+    def api_upload_test_screenshot(run_id: str) -> ResponseReturnValue:
+        file_path = str(request.form.get("file_path")
+                        or request.form.get("filePath") or "")
+        case_id = str(request.form.get("case_id")
+                      or request.form.get("caseId") or "")
+        uploaded = request.files.get("screenshot")
+        if not file_path or not case_id:
+            return jsonify({"error": "Missing file_path or case_id"}), 400
+        if not uploaded or not uploaded.filename:
+            return jsonify({"error": "Missing screenshot file"}), 400
+
+        original_name = secure_filename(uploaded.filename) or "screenshot"
+        extension = Path(original_name).suffix.lower()
+        if extension not in SCREENSHOT_EXTENSIONS:
+            return jsonify({"error": "Screenshot must be a PNG, JPG, GIF, or WebP image"}), 400
+        try:
+            runs.get_run(run_id, scope=store.scan_dirs)
+        except RunNotFoundError:
+            return jsonify({"error": f"Test run not found: {run_id}"}), 404
+
+        screenshot_id = uuid.uuid4().hex
+        stored_name = f"{screenshot_id}{extension}"
+        target_dir = screenshot_directory(run_id)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / stored_name
+        uploaded.save(target)
+        metadata = {
+            "id": screenshot_id,
+            "name": original_name,
+            "stored_name": stored_name,
+            "content_type": SCREENSHOT_MIME_TYPES[extension],
+            "size": target.stat().st_size,
+            "path": f"test-runs/screenshots/{run_id}/{stored_name}",
+        }
+        try:
+            result = runs.add_screenshot(
+                run_id=run_id,
+                file_path=file_path,
+                case_id=case_id,
+                screenshot=metadata,
+                scope=store.scan_dirs,
+            )
+        except RunNotFoundError:
+            target.unlink(missing_ok=True)
+            return jsonify({"error": f"Test run not found: {run_id}"}), 404
+        except InvalidRunError as exc:
+            target.unlink(missing_ok=True)
+            return jsonify({"error": str(exc)}), 400
+        broker.publish({
+            "type": "test_run",
+            "action": "screenshot_uploaded",
+            "run_id": run_id,
+            "file_path": file_path,
+            "case_id": case_id,
+        })
+        return jsonify(result), 201
+
+    @app.delete("/api/test-runs/<run_id>/screenshots/<screenshot_id>")
+    def api_delete_test_run_screenshot(run_id: str, screenshot_id: str) -> ResponseReturnValue:
+        try:
+            result = runs.remove_screenshot(
+                run_id=run_id,
+                screenshot_id=screenshot_id,
+                scope=store.scan_dirs,
+            )
+        except RunNotFoundError:
+            return jsonify({"error": f"Test run not found: {run_id}"}), 404
+        except InvalidRunError as exc:
+            return jsonify({"error": str(exc)}), 404
+
+        screenshot = result.get("screenshot") or {}
+        stored_name = str(screenshot.get("stored_name") or "")
+        if Path(stored_name).name == stored_name:
+            (screenshot_directory(run_id) / stored_name).unlink(missing_ok=True)
+            (legacy_screenshot_directory(run_id) /
+             stored_name).unlink(missing_ok=True)
+
+        file_path, case_id = split_result_key(str(result.get("key") or ""))
+        broker.publish({
+            "type": "test_run",
+            "action": "screenshot_deleted",
+            "run_id": run_id,
+            "file_path": file_path,
+            "case_id": case_id,
+        })
+        return jsonify(result)
+
+    @app.get("/api/test-runs/<run_id>/screenshots/<screenshot_id>")
+    def api_test_run_screenshot(run_id: str, screenshot_id: str) -> ResponseReturnValue:
+        try:
+            data = runs.get_run(run_id, scope=store.scan_dirs)
+        except RunNotFoundError:
+            return jsonify({"error": f"Test run not found: {run_id}"}), 404
+        screenshot = find_screenshot(data, screenshot_id)
+        if not screenshot:
+            return jsonify({"error": f"Screenshot not found: {screenshot_id}"}), 404
+        stored_name = str(screenshot.get("stored_name") or "")
+        if Path(stored_name).name != stored_name:
+            return jsonify({"error": f"Screenshot not found: {screenshot_id}"}), 404
+        screenshot_path = screenshot_file_path(run_id, stored_name)
+        if not screenshot_path.exists():
+            return jsonify({"error": f"Screenshot not found: {screenshot_id}"}), 404
+        return send_from_directory(
+            screenshot_path.parent,
+            screenshot_path.name,
+            mimetype=str(screenshot.get("content_type") or "image/png"),
+        )
 
     @app.patch("/api/cases")
     def api_update_case() -> ResponseReturnValue:

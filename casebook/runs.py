@@ -173,6 +173,7 @@ class TestRunStore:
         case_id: str,
         status: str | None = None,
         notes: str | None = None,
+        actual_result: str | None = None,
         defects: list[str] | str | None = None,
         tester: str | None = None,
         scope: list[str] | None = None,
@@ -201,7 +202,11 @@ class TestRunStore:
             next_result = {
                 "status": existing.get("status", "untested"),
                 "notes": existing.get("notes", ""),
+                "actual_result": existing.get("actual_result", ""),
                 "defects": existing.get("defects", []),
+                "screenshots": self._normalize_screenshots(
+                    existing.get("screenshots", [])
+                ),
                 "tester": existing.get("tester", ""),
                 "updated_at": now,
             }
@@ -217,6 +222,8 @@ class TestRunStore:
 
             if notes is not None:
                 next_result["notes"] = str(notes)
+            if actual_result is not None:
+                next_result["actual_result"] = str(actual_result)
             if defects is not None:
                 next_result["defects"] = self._normalize_defects(defects)
             if tester is not None:
@@ -233,6 +240,131 @@ class TestRunStore:
                 run.pop("updated_at", None)
             self._save(run_id, data)
             return {"key": key, "result": next_result, "run": data}
+
+    def add_screenshot(
+        self,
+        run_id: str,
+        file_path: str,
+        case_id: str,
+        screenshot: dict[str, Any],
+        scope: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Attach one screenshot metadata record to a case execution result."""
+        with self._lock:
+            data = self._load(run_id)
+            expected_scope = self._normalize_scope(scope)
+            if expected_scope is not None:
+                run = data.get("run") or {}
+                if not isinstance(run, dict) or self._normalize_scope(run.get("scope")) != expected_scope:
+                    raise RunNotFoundError(run_id)
+            key = self.key(file_path, case_id)
+            case_scope = self._run_case_scope(data)
+            if case_scope is not None and key not in set(case_scope):
+                raise InvalidRunError(
+                    "Case is not included in this test plan.")
+
+            results = data.setdefault("results", {})
+            if not isinstance(results, dict):
+                results = {}
+                data["results"] = results
+            existing = results.get(key) if isinstance(
+                results.get(key), dict) else {}
+            now = self._now()
+            screenshots = self._normalize_screenshots(
+                existing.get("screenshots", []))
+            next_screenshot = {
+                **screenshot,
+                "uploaded_at": str(screenshot.get("uploaded_at") or now),
+            }
+            screenshots.append(next_screenshot)
+            next_result = {
+                "status": existing.get("status", "untested"),
+                "notes": existing.get("notes", ""),
+                "actual_result": existing.get("actual_result", ""),
+                "defects": existing.get("defects", []),
+                "screenshots": screenshots,
+                "tester": existing.get("tester", ""),
+                "updated_at": now,
+            }
+            if existing.get("executed_at"):
+                next_result["executed_at"] = existing.get("executed_at")
+
+            results[key] = next_result
+            run = data.setdefault("run", {})
+            if isinstance(run, dict):
+                run["started_at"] = str(
+                    run.get("started_at") or run.get("created_at") or now)
+                run["completed_at"] = now
+                run.pop("build", None)
+                run.pop("created_at", None)
+                run.pop("updated_at", None)
+            self._save(run_id, data)
+            return {"key": key, "result": next_result, "run": data}
+
+    def remove_screenshot(
+        self,
+        run_id: str,
+        screenshot_id: str,
+        scope: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Remove one screenshot metadata record from a test plan."""
+        with self._lock:
+            data = self._load(run_id)
+            expected_scope = self._normalize_scope(scope)
+            if expected_scope is not None:
+                run = data.get("run") or {}
+                if not isinstance(run, dict) or self._normalize_scope(run.get("scope")) != expected_scope:
+                    raise RunNotFoundError(run_id)
+
+            results = data.get("results") or {}
+            if not isinstance(results, dict):
+                raise InvalidRunError("Screenshot not found.")
+
+            target_key = ""
+            target_result: dict[str, Any] | None = None
+            removed: dict[str, Any] | None = None
+            for key, result in results.items():
+                if not isinstance(result, dict):
+                    continue
+                screenshots = self._normalize_screenshots(
+                    result.get("screenshots", []))
+                kept = [
+                    screenshot
+                    for screenshot in screenshots
+                    if screenshot.get("id") != screenshot_id
+                ]
+                if len(kept) == len(screenshots):
+                    continue
+                removed = next(
+                    screenshot
+                    for screenshot in screenshots
+                    if screenshot.get("id") == screenshot_id
+                )
+                result["screenshots"] = kept
+                result["updated_at"] = self._now()
+                target_key = str(key)
+                target_result = result
+                break
+
+            if not removed or target_result is None:
+                raise InvalidRunError("Screenshot not found.")
+
+            run = data.setdefault("run", {})
+            if isinstance(run, dict):
+                now = self._now()
+                run["started_at"] = str(
+                    run.get("started_at") or run.get("created_at") or now)
+                run["completed_at"] = now
+                run.pop("build", None)
+                run.pop("created_at", None)
+                run.pop("updated_at", None)
+            self._save(run_id, data)
+            return {
+                "key": target_key,
+                "result": target_result,
+                "screenshot": removed,
+                "run": data,
+            }
 
     def key(self, file_path: str, case_id: str) -> str:
         """Build the canonical execution key used in run JSON files."""
@@ -325,6 +457,29 @@ class TestRunStore:
         else:
             items = [str(item) for item in defects]
         return [item.strip() for item in items if item.strip()]
+
+    def _normalize_screenshots(self, screenshots: Any) -> list[dict[str, Any]]:
+        """Keep only screenshot metadata that can be served safely."""
+        if not isinstance(screenshots, list):
+            return []
+        normalized: list[dict[str, Any]] = []
+        for item in screenshots:
+            if not isinstance(item, dict):
+                continue
+            screenshot_id = str(item.get("id") or "").strip()
+            stored_name = str(item.get("stored_name") or "").strip()
+            if not screenshot_id or not stored_name:
+                continue
+            normalized.append({
+                "id": screenshot_id,
+                "name": str(item.get("name") or stored_name),
+                "stored_name": stored_name,
+                "content_type": str(item.get("content_type") or ""),
+                "size": int(item.get("size") or 0),
+                "path": str(item.get("path") or ""),
+                "uploaded_at": str(item.get("uploaded_at") or ""),
+            })
+        return normalized
 
     def _normalize_scope(self, scope: Any) -> list[str] | None:
         """Normalize a plan scope without inventing a default value."""
