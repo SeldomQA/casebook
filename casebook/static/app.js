@@ -46,7 +46,6 @@ function bindElements() {
     "treePanel",
     "sidebarToggle",
     "sidebarResizer",
-    "refreshButton",
     "reloadNotice",
     "reloadNowButton",
     "emptyState",
@@ -107,7 +106,6 @@ function bindEvents() {
   els.sidebarResizer.addEventListener("pointerdown", startSidebarResize);
   els.sidebarResizer.addEventListener("keydown", handleSidebarResizeKeydown);
   window.addEventListener("resize", syncSidebarWidthToViewport);
-  els.refreshButton.addEventListener("click", refreshAll);
   els.reloadNowButton.addEventListener("click", () => reloadAfterExternalChange(true));
   els.executionSummary.addEventListener("click", (event) => {
     if (event.target.closest("select, button")) return;
