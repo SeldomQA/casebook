@@ -119,6 +119,41 @@ button {
   letter-spacing: 0.04em;
 }
 
+.app-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.github-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.github-link svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: currentColor;
+}
+
 .app-bar-version {
   color: rgba(255, 255, 255, 0.72);
   font-size: 12px;
@@ -188,10 +223,7 @@ body.sidebar-collapsed .sidebar {
 }
 
 .sidebar-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  display: block;
 }
 
 .outline-button {
@@ -1800,6 +1832,10 @@ body.resizing-sidebar .app-shell {
 }
 
 @media (max-width: 720px) {
+  .github-link span {
+    display: none;
+  }
+
   .app-shell {
     display: block;
   }
