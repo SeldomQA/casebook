@@ -1,6 +1,6 @@
 # Casebook 使用说明
 
-本文档承接 README 中不适合展开太长的使用细节，覆盖 AI Agent 生成用例、用例 ID 重排、静态 HTML 用例导出、测试计划、项目状态文件和 HTML 测试报告。
+本文档承接 README 中不适合展开太长的使用细节，覆盖 AI Agent 生成用例、用例 ID 重排、静态 HTML 用例导出、测试计划、项目状态文件、HTML 测试报告和 AI Agent 生成测试过程记录。
 
 ## 使用 AI Agent 生成用例
 
@@ -243,9 +243,7 @@ Casebook 的标记数据保存在项目根目录：
 test-runs/*.json
 ```
 
-这些文件是后续生成测试报告的重要数据来源。测试计划按启动目录隔离，适合围绕单个需求、版本或模块做执行统计。
-
-
+这些文件是后续生成 HTML 测试报告、测试过程记录和上线评审材料的重要数据来源。测试计划按启动目录隔离，适合围绕单个需求、版本或模块做执行统计。
 
 ## HTML 测试报告
 
@@ -276,3 +274,67 @@ casebook report test-runs/run-20260625093000-login-smoke.json --output reports/l
 - 阻塞用例列表，包含执行备注和缺陷链接。
 
 报告 HTML 通过 CDN 引入 ECharts 渲染图表；即使图表脚本未加载，报告中的概览数字和用例列表仍然可以直接查看。
+
+## AI Agent 生成测试过程记录
+
+测试过程记录不适合由一个固定 CLI 模板硬生成。真实需求和执行方式经常不同：有的需要 SQL，有的需要接口请求响应，有的需要前端截图，有的更像上线评审记录。Casebook 的边界是保存结构化证据，AI Agent 的边界是根据你的目标和模板组织文档。
+
+项目提供了专门的技能包：
+
+```text
+.agents/skills/casebook-test-process-record/SKILL.md
+```
+
+也提供了一个可参考但不强制的模板：
+
+```text
+docs/templates/l2-test-process-record.md
+```
+
+推荐向 AI Agent 提供这些关键信息：
+
+- **需求在哪里**：例如 `docs/requirements/login.md`。
+- **用例在哪里**：例如 `releases/example/` 或某个 YAML 文件。
+- **执行结果在哪里**：例如 `test-runs/run-20260625093000-login-smoke.json`。
+- **你想要什么格式**：例如 `docs/templates/l2-test-process-record.md`，或一份已有过程记录。
+
+可以直接使用这样的提示词：
+
+```text
+请使用 .agents/skills/casebook-test-process-record/SKILL.md 生成测试过程记录。
+
+需求文档：
+docs/requirements/login.md
+
+测试用例：
+releases/example/
+
+执行结果：
+test-runs/run-20260625093000-login-smoke.json
+
+截图证据：
+test-runs/screenshots/run-20260625093000-login-smoke/
+
+输出格式参考：
+docs/templates/l2-test-process-record.md
+
+输出到：
+docs/test-logs/login-smoke-test-process-record.md
+```
+
+AI Agent 生成文档时应该读取：
+
+- `docs/requirements/`：理解业务背景和核心逻辑。
+- `releases/`：理解设计过的测试场景、步骤和预期结果。
+- `test-runs/*.json`：读取真实执行状态、实际结果、备注、缺陷链接和截图元数据。
+- `test-runs/screenshots/<run-id>/`：引用或查看截图证据。
+- 用户指定的模板或样例：决定最终文档结构。
+
+生成原则：
+
+- 不编造执行证据。
+- 不强行套固定模板。
+- 失败、阻塞、延期、未执行用例必须清晰可见。
+- 有 `actual_result`、`notes`、`defects`、`screenshots` 的内容不能遗漏。
+- 缺少 SQL、API Payload、日志、测试环境、人工结论等信息时，标记为 `待补充`。
+- 输出到 `docs/test-logs/`，除非用户指定其他位置。
