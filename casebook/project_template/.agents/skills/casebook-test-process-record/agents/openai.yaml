@@ -1,0 +1,7 @@
+interface:
+  display_name: "Casebook Test Process Record"
+  short_description: "Draft test records from Casebook evidence"
+  default_prompt: "Use $casebook-test-process-record to generate a test process record from Casebook requirements, YAML cases, and a test-runs JSON file."
+
+policy:
+  allow_implicit_invocation: true
