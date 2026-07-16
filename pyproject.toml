@@ -30,8 +30,11 @@ casebook = [
   "static/*.js",
   "project_template/AGENTS.md",
   "project_template/.agents/skills/casebook-test-cases/SKILL.md",
+  "project_template/.agents/skills/casebook-test-process-record/SKILL.md",
+  "project_template/.agents/skills/casebook-test-process-record/agents/openai.yaml",
   "project_template/.vscode/settings.json",
   "project_template/docs/requirements/login.md",
+  "project_template/docs/templates/l2-test-process-record.md",
   "project_template/releases/example/login.yaml",
   "project_template/schema/test-case-schema.json",
 ]
