@@ -1,3 +1,14 @@
+## 0.7.0
+
+- 新增：用例执行结果支持 `Actual Result`，用于记录真实观察到的执行结果。
+- 新增：测试计划支持上传、预览和删除执行截图，截图保存到 `test-runs/screenshots/<run-id>/`。
+- 新增：HTML 测试报告展示实际结果和截图证据名称，便于失败/阻塞用例追溯。
+- 新增：项目内置 `casebook-test-process-record` AI Agent 技能包，指导 AI 基于需求、YAML 用例、`test-runs/*.json`、截图和用户模板生成测试过程记录。
+- 新增：提供 `docs/templates/l2-test-process-record.md` 作为测试过程记录参考模板，并同步到 `casebook init` 项目脚手架。
+- 优化：`casebook serve` 顶部导航增加 GitHub 入口。
+- 优化：移除侧栏 `Refresh` 按钮，依赖文件监听和自动刷新保持页面同步。
+- 测试：补充执行截图上传、预览、删除和项目脚手架技能文件的单元测试。
+
 ## 0.6.0
 
 - 新增：测试计划支持 `Full run` 和 `Retest failed/blocked/deferred` 两种执行模式。
