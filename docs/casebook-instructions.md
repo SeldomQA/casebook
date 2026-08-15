@@ -1,6 +1,6 @@
 # Casebook 使用说明
 
-本文档承接 README 中不适合展开太长的使用细节，覆盖 AI Agent 生成用例、用例 ID 重排、静态 HTML 用例导出、测试计划、项目状态文件、HTML 测试报告和 AI Agent 生成测试过程记录。
+本文档承接 README 中不适合展开太长的使用细节，覆盖 AI Agent 生成用例、用例 ID 重排、静态 HTML 用例导出、测试计划、项目状态文件、HTML 测试报告和 AI Agent 生成测试过程记录。`0.8.0` 中，本地工作台、导出页面和测试报告统一为简报式设计，测试计划的管理与报告生成也整合进右侧抽屉。
 
 ## 使用 AI Agent 生成用例
 
@@ -85,7 +85,7 @@ casebook renumber releases/example/login.yaml
 
 - 打开某个 YAML 文件。
 - 确认当前没有选择测试计划。
-- 点击用例列表上方的 `ID 更新`。
+- 点击用例列表上方的 `ID sorting`。
 
 测试计划模式下不支持 ID 重排。测试计划的执行结果以 `文件路径#用例ID` 记录，重排会导致执行结果和用例错位，因此页面会在选择测试计划后禁用 `ID 更新`。
 
@@ -148,6 +148,8 @@ casebook export releases/v1-auth --priority P0,P1
 - 页面内搜索、优先级筛选、标签筛选、展开/收起。
 - 每条用例的 `Needs update` 标记和评审备注。
 
+`0.8.0` 的导出页面采用与本地工作台一致的简报式布局，重点突出项目概览、风险、优先级分布和用例清单，同时支持宽屏与窄屏阅读。
+
 导出的 HTML 不读取项目中的 `.casebook/marks.json`，因此不会把本地工作台的 Mark 状态带出去。HTML 中的评审标记和备注保存在浏览器 localStorage 中，适合会议室电脑临时评审；评审结束后可以点击 `Export review notes` 下载 JSON，把备注带回项目继续处理。
 
 ## 测试计划与用例执行
@@ -158,7 +160,7 @@ Casebook 将执行数据保存在独立文件中，不写入 YAML 用例定义�
 test-runs/<run-id>.json
 ```
 
-测试计划不是必选项。用例评审时可以完全不启用测试计划；需要进入执行阶段时，再展开顶部测试计划面板并创建或选择计划。
+测试计划不是必选项。用例评审时可以完全不启用测试计划；需要进入执行阶段时，点击顶部 `Manage plan` 打开右侧抽屉，在抽屉中创建或选择计划。主页面只展示当前计划摘要和执行进度；没有选择计划时，进度条与统计卡片自动隐藏。
 
 测试计划绑定当前 `casebook serve <目录>` 的启动目录。比如：
 
@@ -175,7 +177,24 @@ casebook serve releases/v1-auth
 - `Full run`：全量执行当前 `casebook serve <目录>` 启动范围下的所有用例。
 - `Retest failed/blocked/deferred`：基于一个已完成的来源测试计划，只带入上一轮 `failed`、`blocked`、`deferred` 的用例。本轮不会继承上一轮结果，所有带入用例都会从 `untested` 开始重新执行。
 
-完成测试计划前，本轮 `case_scope` 内的每条用例都必须被处理过。也就是说，用例状态必须是 `passed`、`failed`、`blocked` 或 `deferred` 之一；仍然存在 `untested` 用例时，`Complete plan` 会拒绝完成。
+选择计划后，工作台进入计划模式：
+
+- 用例列表显示执行结果操作，并隐藏 Edit，避免执行过程中误改 YAML 定义。
+- Actions 列显示 `Passed`、`Failed`、`Blocked`、`Deferred` 等状态选择。
+- 展开用例后可以记录 Notes、Actual Result、Defects 和截图证据。
+- 主页面持续显示 Cases、Passed、Failed、Blocked、Deferred、Untested 统计。
+- `ID sorting` 在计划模式下禁用，避免用例 ID 与执行结果错位。
+
+完成测试计划前，本轮 `case_scope` 内的每条用例都必须被处理过。也就是说，用例状态必须是 `passed`、`failed`、`blocked` 或 `deferred` 之一；仍然存在 `untested` 用例时，`Complete plan & generate report` 会拒绝完成。
+
+完成计划与生成报告现在是一个连续操作：
+
+1. 在测试计划抽屉中填写 Environment 和 Tester。
+2. 输入 Test report name；支持中文名称，也可以直接填写 `.html` 文件名。
+3. 点击 `Complete plan & generate report`。
+4. Casebook 完成计划，将 HTML 写入 `reports/`，并显示 `Open generated report` 链接。
+
+如果 `reports/` 不存在，Casebook 会自动创建。已完成的计划仍可输入新的报告名称，点击 `Generate report` 重新生成，不会重复修改计划完成状态。
 
 用例结果以 `文件路径#用例ID` 作为 key：
 
@@ -245,9 +264,33 @@ test-runs/*.json
 
 这些文件是后续生成 HTML 测试报告、测试过程记录和上线评审材料的重要数据来源。测试计划按启动目录隔离，适合围绕单个需求、版本或模块做执行统计。
 
+从工作台生成的报告保存在：
+
+```text
+reports/*.html
+```
+
+`reports/` 会在第一次生成报告时自动创建。报告文件是独立 HTML，可以直接打开或分发。
+
 ## HTML 测试报告
 
-执行完成后，可以从测试计划 JSON 生成 HTML 报告：
+### 从测试计划抽屉生成
+
+推荐在本地工作台中完成计划并同步生成报告：
+
+```text
+Manage plan
+  -> Complete plan
+  -> Test report name
+  -> Complete plan & generate report
+  -> Open generated report
+```
+
+报告名称会被转换为安全的 HTML 文件名，并写入项目根目录的 `reports/`。已经完成的计划可以使用 `Generate report` 再次生成报告。
+
+### 从命令行生成
+
+也可以从测试计划 JSON 生成 HTML 报告：
 
 ```bash
 casebook report test-runs/run-20260625093000-login-smoke.json
@@ -268,10 +311,12 @@ casebook report test-runs/run-20260625093000-login-smoke.json --output reports/l
 报告内容包括：
 
 - 测试计划基本信息：ID、名称、状态、范围、测试环境、测试人员、开始时间和完成时间。
-- 执行概览：用例总数、已执行、已通过、失败、阻塞、待测试。
-- ECharts 环形图：执行状态分布、失败/阻塞优先级分布。
-- 失败用例列表，包含执行备注和缺陷链接。
-- 阻塞用例列表，包含执行备注和缺陷链接。
+- Execution Summary：用例总数、已执行、通过、失败、阻塞、延期和待测试，每种状态使用独立配色。
+- Quality Signals：执行状态分布、通过率和失败/阻塞优先级分布。
+- Attention Required：Failed Cases 和 Blocked Cases 的重点关注列表。
+- Execution Details：默认收起的完整用例清单，主行显示 Case、Title、Priority 和 Result。
+- 展开执行明细后，可以查看 File、Notes、Actual Result、Defects、Screenshots 和 Executed At。
+- 白色简报式页脚和适配宽屏、平板、窄屏的响应式布局。
 
 报告 HTML 通过 CDN 引入 ECharts 渲染图表；即使图表脚本未加载，报告中的概览数字和用例列表仍然可以直接查看。
 

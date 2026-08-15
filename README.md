@@ -47,8 +47,9 @@ docs/requirements/ 需求文档
     -> casebook serve <需求或版本目录>
     -> 本地浏览、评审、标记、轻量编辑、执行
     -> .casebook/marks.json + test-runs/<run-id>.json
-    -> casebook report <run-file>
-    -> HTML 测试报告
+    -> 完成测试计划并输入报告名称
+    -> reports/<报告名称>.html
+    -> 也可使用 casebook report <run-file> 单独生成
 ```
 
 这也是 Casebook 和一般AI测试用例平台最大的区别：
@@ -150,10 +151,10 @@ http://127.0.0.1:8089
 - 展开用例查看前置条件、步骤和预期结果。
 - 使用 Mark 标记需要关注或后续调整的用例。
 - 对已有用例做轻量编辑，并保存回 YAML 文件。
-- 评审插入或删除用例后，使用 `ID 更新` 按当前 YAML 顺序重排用例 ID。
+- 评审插入或删除用例后，使用 `ID sorting` 按当前 YAML 顺序重排用例 ID。
 
 > 如果评审后需要新增、删除、拆分或重构用例，推荐继续交给 AI Agent 修改 YAML，而不是在页面中逐条维护。
-> `ID 更新` 只适合评审阶段；选择测试计划后会禁用，避免执行结果和用例 ID 错位。
+> `ID sorting` 只适合评审阶段；选择测试计划后会禁用，避免执行结果和用例 ID 错位。
 
 ### 4. 导出静态 HTML 用例包
 
@@ -191,14 +192,16 @@ casebook export releases/example --priority P0
 
 ![Casebook 测试计划](./images/test-plan.png)
 
-测试计划默认折叠，不影响用例评审。进入执行阶段后，可以展开顶部测试计划面板：
+测试计划默认不影响用例评审。进入执行阶段后，点击顶部的 `Manage plan` 打开右侧测试计划抽屉：
 
 - 创建或选择测试计划。新计划支持 `Full run` 和 `Retest failed/blocked/deferred` 两种模式。
 - `Full run` 覆盖当前启动范围内全部用例；`Retest failed/blocked/deferred` 基于已完成的上一轮，只带入失败、阻塞和延期用例。
 - 为每条用例选择 `Passed`、`Failed`、`Blocked` 或 `Deferred`。
-- 记录执行备注和 JIRA 缺陷链接。
-- 查看执行进度条和统计数据。
-- 点击 `Complete plan` 完成本轮测试计划，并写入测试环境和测试人员；如果本轮范围内仍有 `Untested` 用例，计划不能完成。
+- 展开用例记录执行备注、实际结果、JIRA 缺陷链接和截图证据。
+- 在主页面查看执行进度条和统计数据；未选择计划时，进度区域自动隐藏。
+- 计划模式隐藏 Edit，只保留执行结果操作，避免执行过程中误改用例定义。
+- 所有用例处理完后，填写测试环境、测试人员和报告名称，点击 `Complete plan & generate report` 完成计划并生成报告。
+- 如果本轮范围内仍有 `Untested` 用例，计划不能完成，也不能生成最终报告。
 
 执行数据会保存到：
 
@@ -210,7 +213,22 @@ test-runs/<run-id>.json
 
 ### 6. 生成 HTML 测试报告
 
-执行完成后，使用测试计划 JSON 生成报告：
+推荐直接在测试计划抽屉中生成报告：
+
+1. 确保当前计划没有 `Untested` 用例。
+2. 填写测试环境、测试人员和报告名称。
+3. 点击 `Complete plan & generate report`。
+4. 生成成功后点击 `Open generated report`。
+
+报告默认保存到：
+
+```text
+reports/<报告名称>.html
+```
+
+已经完成的计划可以重新填写报告名称并点击 `Generate report` 再次生成。
+
+仍然可以通过命令行从测试计划 JSON 单独生成报告：
 
 ```bash
 casebook report test-runs/run-20260625093000-login-smoke.json --output reports/login-smoke.html
@@ -222,11 +240,11 @@ casebook report test-runs/run-20260625093000-login-smoke.json --output reports/l
 
 报告包含：
 
-- 测试计划基本信息。
-- 执行概览和通过率统计。
-- ECharts 图表。
-- 失败用例列表，包含执行备注和缺陷链接。
-- 阻塞用例列表，包含执行备注和缺陷链接。
+- 测试计划、范围、环境、测试人员和时间信息。
+- 独立配色的执行摘要卡片和完成率。
+- 执行状态分布、失败/阻塞优先级等质量信号。
+- Failed Cases 和 Blocked Cases 重点关注列表。
+- 默认收起的完整执行明细，可展开查看备注、实际结果、缺陷、截图和执行时间。
 
 到这里，一个从需求、AI 生成用例、本地评审、用例执行到 HTML 测试报告的 Casebook 闭环就完成了。
 
