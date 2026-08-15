@@ -2629,3 +2629,344 @@ body.sidebar-collapsed .app-shell {
     bottom: 8px;
   }
 }
+
+/* Layout resilience: fill wide screens and respond to the case card's real width. */
+.app-shell,
+.workspace {
+  width: 100%;
+}
+
+.workspace {
+  max-width: none;
+}
+
+.tree-panel {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tree-panel::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.cases-card {
+  container-name: case-list-card;
+  container-type: inline-size;
+}
+
+.case-table-head,
+.case-summary {
+  grid-template-columns:
+    24px minmax(120px, 150px) minmax(360px, 2.4fr) minmax(62px, 0.34fr) minmax(76px, 0.42fr) minmax(96px, 0.52fr) minmax(84px, 0.42fr);
+  gap: 10px;
+}
+
+.case-main-cell {
+  overflow: hidden;
+}
+
+.case-tags-cell {
+  overflow: hidden;
+}
+
+.case-tags-cell .tag-list {
+  max-width: 100%;
+}
+
+.case-actions {
+  min-width: 0;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.text-action {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@container case-list-card (max-width: 980px) {
+  .case-table-head {
+    display: none;
+  }
+
+  .case-summary {
+    grid-template-columns: 24px minmax(120px, 155px) minmax(0, 1fr) minmax(96px, 124px);
+    gap: 8px 12px;
+  }
+
+  .case-priority-cell {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .case-type-cell {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  .case-tags-cell {
+    grid-column: 3 / 5;
+    grid-row: 3;
+  }
+
+  .case-actions {
+    grid-column: 4;
+    grid-row: 1;
+  }
+}
+
+@container case-list-card (max-width: 640px) {
+  .case-summary {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 7px 10px;
+    padding: 11px 12px;
+  }
+
+  .case-toggle-cell {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .case-id-cell {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .case-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .case-main-cell {
+    grid-column: 2 / 4;
+    grid-row: 2;
+  }
+
+  .case-priority-cell {
+    grid-column: 2 / 4;
+    grid-row: 3;
+  }
+
+  .case-type-cell {
+    grid-column: 2 / 4;
+    grid-row: 4;
+  }
+
+  .case-tags-cell {
+    grid-column: 2 / 4;
+    grid-row: 5;
+  }
+}
+
+@container case-list-card (max-width: 980px) {
+  .case-table-head {
+    display: grid;
+    grid-template-columns: 24px minmax(120px, 155px) minmax(0, 1fr) minmax(96px, 124px);
+    gap: 5px 12px;
+    align-items: center;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  .case-table-head> :nth-child(1) {
+    grid-column: 1;
+    grid-row: 1 / 4;
+  }
+
+  .case-table-head> :nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(3) {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(4) {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .case-table-head> :nth-child(5) {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  .case-table-head> :nth-child(6) {
+    grid-column: 3 / 5;
+    grid-row: 3;
+  }
+
+  .case-table-head> :nth-child(7) {
+    grid-column: 4;
+    grid-row: 1;
+    text-align: right;
+  }
+}
+
+@container case-list-card (max-width: 640px) {
+  .case-table-head {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 5px 10px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .case-table-head> :nth-child(1) {
+    grid-column: 1;
+    grid-row: 1 / 6;
+  }
+
+  .case-table-head> :nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(3) {
+    grid-column: 2 / 4;
+    grid-row: 2;
+  }
+
+  .case-table-head> :nth-child(4) {
+    grid-column: 2 / 4;
+    grid-row: 3;
+  }
+
+  .case-table-head> :nth-child(5) {
+    grid-column: 2 / 4;
+    grid-row: 4;
+  }
+
+  .case-table-head> :nth-child(6) {
+    grid-column: 2 / 4;
+    grid-row: 5;
+  }
+
+  .case-table-head> :nth-child(7) {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+/* Keep the useful table columns aligned when the case panel gets narrow. */
+@container case-list-card (max-width: 980px) {
+
+  .case-table-head,
+  .case-summary {
+    grid-template-columns:
+      24px minmax(120px, 150px) minmax(240px, 1fr) minmax(62px, 72px) minmax(80px, 0.45fr) minmax(64px, 76px);
+    gap: 10px;
+  }
+
+  .case-table-head {
+    align-items: start;
+  }
+
+  .case-table-head> :nth-child(1),
+  .case-toggle-cell {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(2),
+  .case-id-cell {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(3),
+  .case-main-cell {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(4),
+  .case-priority-cell {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(5),
+  .case-type-cell {
+    display: none;
+  }
+
+  .case-table-head> :nth-child(6),
+  .case-tags-cell {
+    grid-column: 5;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(7),
+  .case-actions {
+    grid-column: 6;
+    grid-row: 1;
+  }
+
+  .case-id-cell,
+  .case-main-cell,
+  .case-priority-cell,
+  .case-tags-cell,
+  .case-actions {
+    align-self: start;
+    padding-top: 0;
+  }
+
+  .case-actions {
+    align-items: flex-start;
+  }
+
+  .text-action {
+    min-height: 20px;
+    line-height: 20px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+@container case-list-card (max-width: 640px) {
+
+  .case-table-head,
+  .case-summary {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+
+  .case-table-head> :nth-child(1) {
+    grid-column: 1;
+    grid-row: 1 / 5;
+  }
+
+  .case-table-head> :nth-child(2),
+  .case-id-cell {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(7),
+  .case-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(3),
+  .case-main-cell {
+    grid-column: 2 / 4;
+    grid-row: 2;
+  }
+
+  .case-table-head> :nth-child(4),
+  .case-priority-cell {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .case-table-head> :nth-child(6),
+  .case-tags-cell {
+    grid-column: 2 / 4;
+    grid-row: 4;
+  }
+}
