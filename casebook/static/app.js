@@ -9,6 +9,7 @@ const state = {
   runs: [],
   currentRunId: null,
   currentRun: null,
+  generatedReport: null,
   testPlanExpanded: false,
   currentFile: null,
   currentData: null,
@@ -71,6 +72,8 @@ function bindElements() {
     "completionControlRow",
     "runEnvironmentInput",
     "runTesterInput",
+    "reportNameInput",
+    "reportOutputLink",
     "completeRunButton",
     "executionProgressBar",
     "executionProgressText",
@@ -571,23 +574,38 @@ function renderExecutionPanel() {
     ? "Create a new plan from the selected plan's failed, blocked, and deferred cases"
     : "Create a full test plan for the current scope";
   const isCompleted = run?.status === "completed";
-  const canCompleteRun = Boolean(state.currentRunId && stats.total > 0 && stats.untested === 0 && !isCompleted);
+  const canFinishRun = Boolean(state.currentRunId && stats.total > 0 && stats.untested === 0);
+  const canCompleteRun = canFinishRun && !isCompleted;
   els.completionControlRow.hidden = !state.currentRunId;
   els.runEnvironmentInput.value = run?.environment || defaults.environment;
   els.runTesterInput.value = run?.tester || defaults.tester;
+  if (run && !els.reportNameInput.value.trim()) {
+    els.reportNameInput.value = `${run.name || run.id || "test-plan"} report`;
+  }
   els.runEnvironmentInput.disabled = !canCompleteRun;
   els.runTesterInput.disabled = !canCompleteRun;
-  els.completeRunButton.disabled = !canCompleteRun;
+  els.reportNameInput.disabled = !canFinishRun;
+  els.completeRunButton.disabled = !canFinishRun;
+  els.completeRunButton.textContent = isCompleted
+    ? "Generate report"
+    : "Complete plan & generate report";
   els.completeRunButton.title = state.currentRunId && stats.untested > 0
     ? `Cannot complete: ${stats.untested} untested cases remain`
-    : "Complete test plan";
+    : isCompleted
+      ? "Generate a report for this completed test plan"
+      : "Complete the test plan and generate its report";
+  els.reportOutputLink.hidden = !state.generatedReport;
+  els.reportOutputLink.href = state.generatedReport?.url || "#";
+  els.reportOutputLink.textContent = state.generatedReport
+    ? `Open ${state.generatedReport.name}`
+    : "Open generated report";
   els.completionHint.textContent = !state.currentRunId
     ? "Select a test plan first."
     : isCompleted
-      ? "This test plan is completed."
+      ? "This test plan is completed. Enter a report name to generate it again."
       : stats.untested > 0
         ? `${stats.untested} untested cases remain before completion.`
-        : "All cases are executed. Add the environment and tester, then complete the plan.";
+        : "All cases are executed. Add the report name, then complete the plan.";
   syncRenumberButton();
 
   els.executionProgressBar.style.width = `${percent}%`;
@@ -1123,6 +1141,8 @@ async function saveReviewDetails(caseId) {
 }
 
 async function selectRun(runId) {
+  state.generatedReport = null;
+  els.reportNameInput.value = "";
   state.currentRunId = runId || null;
   state.currentRun = state.currentRunId ? await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`) : null;
   if (state.currentRunId) state.testPlanExpanded = true;
@@ -1152,6 +1172,8 @@ async function createRun() {
     });
     state.currentRun = response;
     state.currentRunId = response.run.id;
+    state.generatedReport = null;
+    els.reportNameInput.value = "";
     state.testPlanExpanded = true;
     els.runNameInput.value = "";
     state.runs = await api("/api/test-runs");
@@ -1175,19 +1197,27 @@ async function completeRun() {
     return;
   }
   const defaults = testPlanDefaults();
+  const reportName = els.reportNameInput.value.trim();
+  if (!reportName) {
+    showToast("Enter a test report name");
+    els.reportNameInput.focus();
+    return;
+  }
   try {
     const response = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`, {
       method: "PATCH",
       body: JSON.stringify({
         environment: els.runEnvironmentInput.value.trim() || defaults.environment,
         tester: els.runTesterInput.value.trim() || defaults.tester,
+        report_name: reportName,
       }),
     });
     state.currentRun = response;
+    state.generatedReport = response.report || null;
     state.runs = await api("/api/test-runs");
     renderExecutionPanel();
     renderCaseRows();
-    showToast("Test plan completed");
+    showToast(state.generatedReport ? "Test report generated" : "Test plan completed");
   } catch (error) {
     showToast(error.message);
   }

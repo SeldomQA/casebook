@@ -196,8 +196,11 @@
           <div class="execution-control-row completion-control-row" id="completionControlRow">
             <input id="runEnvironmentInput" type="text" placeholder="Environment">
             <input id="runTesterInput" type="text" placeholder="Tester">
-            <button class="primary-button success-button" id="completeRunButton" type="button">Complete
-              plan</button>
+            <input class="report-name-input" id="reportNameInput" type="text" placeholder="Test report name">
+            <button class="primary-button success-button" id="completeRunButton" type="button">Complete plan &amp;
+              generate report</button>
+            <a class="outline-button report-output-link" id="reportOutputLink" href="#" target="_blank"
+              rel="noopener noreferrer" hidden>Open generated report</a>
           </div>
         </div>
       </section>

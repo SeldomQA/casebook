@@ -3129,6 +3129,23 @@ body.sidebar-collapsed .app-shell {
   grid-column: 1 / -1;
 }
 
+.plan-drawer-body .report-name-input,
+.plan-drawer-body .report-output-link {
+  grid-column: 1 / -1;
+}
+
+.plan-drawer-body .report-output-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  text-decoration: none;
+}
+
+.plan-drawer-body .report-output-link[hidden] {
+  display: none;
+}
+
 .plan-drawer-body .execution-progress {
   margin-top: 0;
 }
@@ -3179,6 +3196,11 @@ body.sidebar-collapsed .app-shell {
   }
 
   .plan-drawer-body .completion-control-row .success-button {
+    grid-column: 1;
+  }
+
+  .plan-drawer-body .report-name-input,
+  .plan-drawer-body .report-output-link {
     grid-column: 1;
   }
 }

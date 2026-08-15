@@ -16,6 +16,7 @@ from flask import (
     request,
     send_from_directory,
     stream_with_context,
+    url_for,
 )
 from flask.typing import ResponseReturnValue
 from werkzeug.utils import secure_filename
@@ -24,6 +25,7 @@ from . import __version__
 from .editor import CaseEditor, CaseNotFoundError, EditConflictError
 from .marks import MarksStore
 from .renumber import CaseIdRenumberError, CaseIdRenumberer
+from .report import ReportError, generate_report
 from .runs import InvalidRunError, RunNotFoundError, TestRunStore
 from .scanner import CasebookStore
 from .watcher import CasebookWatcher
@@ -154,6 +156,19 @@ def create_app(
         if current.exists():
             return current
         return legacy_screenshot_directory(run_id) / stored_name
+
+    def report_filename(name: Any) -> str:
+        """Build a safe, Unicode-friendly HTML filename from a report name."""
+        raw = str(name or "").strip()
+        if not raw:
+            return ""
+        stem = raw[:-5] if raw.lower().endswith(".html") else raw
+        safe = "".join(
+            char if char.isalnum() or char in {"-", "_", " ", "."} else "-"
+            for char in stem
+        ).strip(" .-_")
+        safe = "-".join(safe.split())
+        return f"{safe}.html" if safe else ""
 
     def find_screenshot(data: dict[str, Any], screenshot_id: str) -> dict[str, Any] | None:
         """Find screenshot metadata across all execution results in a run."""
@@ -367,26 +382,60 @@ def create_app(
         except RunNotFoundError:
             return jsonify({"error": f"Test run not found: {run_id}"}), 404
 
+    @app.get("/reports/<path:filename>")
+    def report_file(filename: str) -> ResponseReturnValue:
+        return send_from_directory(store.project_root / "reports", filename)
+
     @app.patch("/api/test-runs/<run_id>")
     def api_complete_test_run(run_id: str) -> ResponseReturnValue:
         payload = request.get_json(silent=True) or {}
+        report_name = str(payload.get("report_name") or payload.get("reportName") or "").strip()
         try:
-            result = runs.complete_run(
-                run_id=run_id,
-                environment=payload.get("environment"),
-                tester=payload.get("tester"),
-                scope=store.scan_dirs,
-                required_case_keys=case_keys_for_run(run_id),
-            )
+            current = runs.get_run(run_id, scope=store.scan_dirs)
+            current_run = current.get("run") or {}
+            if isinstance(current_run, dict) and current_run.get("status") == "completed":
+                result = current
+            else:
+                result = runs.complete_run(
+                    run_id=run_id,
+                    environment=payload.get("environment"),
+                    tester=payload.get("tester"),
+                    scope=store.scan_dirs,
+                    required_case_keys=case_keys_for_run(run_id),
+                )
         except RunNotFoundError:
             return jsonify({"error": f"Test run not found: {run_id}"}), 404
         except InvalidRunError as exc:
             return jsonify({"error": str(exc)}), 400
+
+        generated_report = None
+        if report_name:
+            filename = report_filename(report_name)
+            if not filename:
+                return jsonify({"error": "Enter a valid report name"}), 400
+            run_path = store.project_root / "test-runs" / f"{run_id}.json"
+            output_path = store.project_root / "reports" / filename
+            try:
+                target = generate_report(
+                    run_path,
+                    output_file=output_path,
+                    project_root=store.project_root,
+                )
+            except (ReportError, OSError) as exc:
+                return jsonify({"error": f"Unable to generate report: {exc}"}), 500
+            generated_report = {
+                "name": report_name,
+                "filename": filename,
+                "path": target.relative_to(store.project_root).as_posix(),
+                "url": url_for("report_file", filename=filename),
+            }
         broker.publish({
             "type": "test_run",
-            "action": "completed",
+            "action": "report_generated" if generated_report else "completed",
             "run_id": run_id,
         })
+        if generated_report:
+            result["report"] = generated_report
         return jsonify(result)
 
     @app.patch("/api/test-runs/<run_id>/results")
