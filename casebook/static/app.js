@@ -59,6 +59,10 @@ function bindElements() {
     "executionToggle",
     "executionPanelBody",
     "executionScopeText",
+    "currentRunSummaryLabel",
+    "testPlanProgressOverview",
+    "testPlanDrawer",
+    "closeTestPlanDrawerButton",
     "runSelect",
     "runModeSelect",
     "sourceRunSelect",
@@ -71,6 +75,7 @@ function bindElements() {
     "executionProgressBar",
     "executionProgressText",
     "executionStats",
+    "completionHint",
     "fileMeta",
     "caseSearch",
     "priorityFilters",
@@ -112,7 +117,7 @@ function bindEvents() {
   window.addEventListener("resize", syncSidebarWidthToViewport);
   els.reloadNowButton.addEventListener("click", () => reloadAfterExternalChange(true));
   els.executionSummary.addEventListener("click", (event) => {
-    if (event.target.closest("select, button")) return;
+    if (event.target.closest("button")) return;
     toggleTestPlanPanel();
   });
   els.executionToggle.addEventListener("click", toggleTestPlanPanel);
@@ -205,7 +210,8 @@ function bindEvents() {
     if (summaryRow) toggleCaseDetails(summaryRow.dataset.caseId);
   });
   els.closeDrawerButton.addEventListener("click", closeDrawer);
-  els.drawerScrim.addEventListener("click", closeDrawer);
+  els.closeTestPlanDrawerButton.addEventListener("click", closeTestPlanDrawer);
+  els.drawerScrim.addEventListener("click", closeActiveDrawer);
   els.screenshotViewerBackdrop.addEventListener("click", closeScreenshotViewer);
   els.screenshotViewerClose.addEventListener("click", closeScreenshotViewer);
   els.saveCaseButton.addEventListener("click", saveCase);
@@ -219,6 +225,14 @@ function bindEvents() {
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !els.screenshotViewer.hidden) {
       closeScreenshotViewer();
+      return;
+    }
+    if (event.key === "Escape" && state.testPlanExpanded) {
+      closeTestPlanDrawer();
+      return;
+    }
+    if (event.key === "Escape" && els.editorDrawer.classList.contains("open")) {
+      closeDrawer();
     }
   });
 }
@@ -506,8 +520,8 @@ function renderExecutionPanel() {
   const run = state.currentRun?.run;
   const defaults = testPlanDefaults();
 
-  els.executionPanel.classList.toggle("expanded", state.testPlanExpanded);
-  els.executionPanel.classList.toggle("collapsed", !state.testPlanExpanded);
+  els.testPlanDrawer.classList.toggle("open", state.testPlanExpanded);
+  els.testPlanDrawer.setAttribute("aria-hidden", String(!state.testPlanExpanded));
   els.executionToggle.setAttribute("aria-expanded", String(state.testPlanExpanded));
   els.executionScopeText.textContent = run
     ? `Scope: ${scope} - ${runModeLabel(run.mode)} - ${stats.total} cases`
@@ -515,6 +529,10 @@ function renderExecutionPanel() {
   els.executionProgressText.textContent = run
     ? `${stats.executed} / ${stats.total} executed - ${percent}%`
     : "Not enabled";
+  els.testPlanProgressOverview.hidden = !state.currentRunId;
+  els.currentRunSummaryLabel.textContent = run
+    ? (run.name || run.id || "Selected plan")
+    : "No plan selected";
 
   const options = [
     `<option value="">Current plan: none</option>`,
@@ -552,8 +570,9 @@ function renderExecutionPanel() {
   els.createRunButton.title = createMode === "retest_unresolved"
     ? "Create a new plan from the selected plan's failed, blocked, and deferred cases"
     : "Create a full test plan for the current scope";
-  const canCompleteRun = Boolean(state.currentRunId && stats.total > 0 && stats.untested === 0);
-  els.completionControlRow.hidden = !canCompleteRun;
+  const isCompleted = run?.status === "completed";
+  const canCompleteRun = Boolean(state.currentRunId && stats.total > 0 && stats.untested === 0 && !isCompleted);
+  els.completionControlRow.hidden = !state.currentRunId;
   els.runEnvironmentInput.value = run?.environment || defaults.environment;
   els.runTesterInput.value = run?.tester || defaults.tester;
   els.runEnvironmentInput.disabled = !canCompleteRun;
@@ -562,6 +581,13 @@ function renderExecutionPanel() {
   els.completeRunButton.title = state.currentRunId && stats.untested > 0
     ? `Cannot complete: ${stats.untested} untested cases remain`
     : "Complete test plan";
+  els.completionHint.textContent = !state.currentRunId
+    ? "Select a test plan first."
+    : isCompleted
+      ? "This test plan is completed."
+      : stats.untested > 0
+        ? `${stats.untested} untested cases remain before completion.`
+        : "All cases are executed. Add the environment and tester, then complete the plan.";
   syncRenumberButton();
 
   els.executionProgressBar.style.width = `${percent}%`;
@@ -778,7 +804,7 @@ function renderCaseRows() {
             <div class="case-tags-cell"><div class="tag-list">${tags}</div></div>
             <div class="case-actions">
               ${state.currentRun ? renderExecutionActions(caseItem.id, execStatus) : ""}
-              <button class="text-action" type="button" data-edit-case="1" data-case-id="${escapeAttr(caseItem.id)}">Edit</button>
+              ${state.currentRun ? "" : `<button class="text-action" type="button" data-edit-case="1" data-case-id="${escapeAttr(caseItem.id)}">Edit</button>`}
             </div>
           </div>
           ${expanded ? renderCaseDetails(caseItem) : ""}
@@ -959,6 +985,7 @@ function normalizeCurrentFilter() {
 function openDrawer(caseId) {
   const caseItem = findCase(caseId);
   if (!caseItem) return;
+  closeTestPlanDrawer();
   state.selectedCaseId = caseId;
   fillDrawer(caseItem);
   els.editorDrawer.classList.add("open");
@@ -970,7 +997,7 @@ function openDrawer(caseId) {
 function closeDrawer() {
   els.editorDrawer.classList.remove("open");
   els.editorDrawer.setAttribute("aria-hidden", "true");
-  els.drawerScrim.hidden = true;
+  syncDrawerScrim();
   state.selectedCaseId = null;
   state.dirty = false;
   renderCaseRows();
@@ -1280,8 +1307,39 @@ function defaultRunName() {
 }
 
 function toggleTestPlanPanel() {
-  state.testPlanExpanded = !state.testPlanExpanded;
+  if (state.testPlanExpanded) {
+    closeTestPlanDrawer();
+    return;
+  }
+  openTestPlanDrawer();
+}
+
+function openTestPlanDrawer() {
+  if (els.editorDrawer.classList.contains("open")) closeDrawer();
+  state.testPlanExpanded = true;
   renderExecutionPanel();
+  syncDrawerScrim();
+}
+
+function closeTestPlanDrawer() {
+  state.testPlanExpanded = false;
+  els.testPlanDrawer.classList.remove("open");
+  els.testPlanDrawer.setAttribute("aria-hidden", "true");
+  els.executionToggle.setAttribute("aria-expanded", "false");
+  syncDrawerScrim();
+}
+
+function closeActiveDrawer() {
+  if (state.testPlanExpanded) {
+    closeTestPlanDrawer();
+    return;
+  }
+  if (els.editorDrawer.classList.contains("open")) closeDrawer();
+}
+
+function syncDrawerScrim() {
+  const anyDrawerOpen = state.testPlanExpanded || els.editorDrawer.classList.contains("open");
+  els.drawerScrim.hidden = !anyDrawerOpen;
 }
 
 function scopeLabel() {

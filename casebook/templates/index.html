@@ -86,36 +86,20 @@
         <button type="button" id="reloadNowButton">Reload now</button>
       </section>
 
-      <section class="test-plan-card collapsed" id="executionPanel">
+      <section class="test-plan-card" id="executionPanel">
         <div class="test-plan-summary" id="executionSummary">
           <div class="test-plan-title">
             <h3>Test plan</h3>
           </div>
-          <select class="test-plan-select" id="runSelect" aria-label="Select current test plan"></select>
+          <span class="test-plan-current" id="currentRunSummaryLabel">No plan selected</span>
           <span class="test-plan-scope" id="executionScopeText">Scope: Loading...</span>
-          <strong id="executionProgressText">Not enabled</strong>
-          <button class="test-plan-toggle" id="executionToggle" type="button" aria-expanded="false"
-            aria-label="Toggle test plan panel">
-            <span class="test-plan-caret" aria-hidden="true"></span>
-          </button>
+          <button class="outline-button test-plan-manage" id="executionToggle" type="button" aria-expanded="false"
+            aria-controls="testPlanDrawer">Manage plan</button>
         </div>
-        <div class="test-plan-body" id="executionPanelBody">
-          <div class="execution-controls">
-            <div class="execution-control-row create-plan-row">
-              <select id="runModeSelect" aria-label="New test plan mode">
-                <option value="full">Full run</option>
-                <option value="retest_unresolved">Retest failed/blocked/deferred</option>
-              </select>
-              <select id="sourceRunSelect" aria-label="Source test plan"></select>
-              <input id="runNameInput" type="text" placeholder="New test plan name">
-              <button class="primary-button" id="createRunButton" type="button">Create plan</button>
-            </div>
-            <div class="execution-control-row completion-control-row" id="completionControlRow">
-              <input id="runEnvironmentInput" type="text" placeholder="Environment">
-              <input id="runTesterInput" type="text" placeholder="Tester">
-              <button class="primary-button success-button" id="completeRunButton" type="button">Complete
-                plan</button>
-            </div>
+        <div class="test-plan-progress-overview" id="testPlanProgressOverview" hidden>
+          <div class="test-plan-progress-heading">
+            <span>Progress</span>
+            <strong id="executionProgressText">Not enabled</strong>
           </div>
           <div class="execution-progress">
             <div class="execution-progress-bar">
@@ -165,6 +149,60 @@
       </section>
     </main>
   </div>
+
+  <aside class="drawer test-plan-drawer" id="testPlanDrawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div>
+        <p class="eyebrow">test execution</p>
+        <h2>Test plan</h2>
+      </div>
+      <button class="drawer-close-button" id="closeTestPlanDrawerButton" type="button"
+        aria-label="Close test plan drawer"></button>
+    </div>
+
+    <div class="test-plan-body plan-drawer-body" id="executionPanelBody">
+      <section class="plan-drawer-section">
+        <div class="plan-section-heading">
+          <span>Current plan</span>
+          <small>Select the plan used for case execution.</small>
+        </div>
+        <select class="test-plan-select" id="runSelect" aria-label="Select current test plan"></select>
+      </section>
+
+      <section class="plan-drawer-section">
+        <div class="plan-section-heading">
+          <span>Create plan</span>
+          <small>Create a full run or retest unresolved cases.</small>
+        </div>
+        <div class="execution-controls">
+          <div class="execution-control-row create-plan-row">
+            <select id="runModeSelect" aria-label="New test plan mode">
+              <option value="full">Full run</option>
+              <option value="retest_unresolved">Retest failed/blocked/deferred</option>
+            </select>
+            <select id="sourceRunSelect" aria-label="Source test plan"></select>
+            <input id="runNameInput" type="text" placeholder="New test plan name">
+            <button class="primary-button" id="createRunButton" type="button">Create plan</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="plan-drawer-section completion-section">
+        <div class="plan-section-heading">
+          <span>Complete plan</span>
+          <small id="completionHint">Select a test plan first.</small>
+        </div>
+        <div class="execution-controls">
+          <div class="execution-control-row completion-control-row" id="completionControlRow">
+            <input id="runEnvironmentInput" type="text" placeholder="Environment">
+            <input id="runTesterInput" type="text" placeholder="Tester">
+            <button class="primary-button success-button" id="completeRunButton" type="button">Complete
+              plan</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </aside>
 
   <aside class="drawer" id="editorDrawer" aria-hidden="true">
     <div class="drawer-header">

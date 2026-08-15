@@ -2970,3 +2970,236 @@ body.sidebar-collapsed .app-shell {
     grid-row: 4;
   }
 }
+
+/* Test-plan actions live in a dedicated drawer; the workspace keeps a compact summary. */
+.test-plan-title h3::before {
+  content: none;
+}
+
+.test-plan-summary {
+  grid-template-columns: auto minmax(180px, 280px) minmax(0, 1fr) auto;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.test-plan-current {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--primary-soft);
+  color: #3377dc;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-plan-manage {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.test-plan-progress-overview {
+  border-top: 1px solid var(--line-soft);
+  padding: 16px;
+}
+
+.test-plan-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.test-plan-progress-heading span {
+  color: #29486f;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.test-plan-progress-heading strong {
+  color: var(--primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.test-plan-progress-overview .execution-progress {
+  margin-top: 0;
+}
+
+.test-plan-progress-overview .execution-stats {
+  grid-template-columns: repeat(6, minmax(96px, 1fr));
+}
+
+.test-plan-drawer {
+  width: min(560px, 100vw);
+}
+
+.test-plan-drawer .drawer-header h2 {
+  margin: 2px 0 0;
+  color: #29486f;
+  font-size: 20px;
+  font-weight: 850;
+}
+
+.plan-drawer-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  border-top: 0;
+  background: #f6f9fd;
+  padding: 16px 18px 24px;
+}
+
+.plan-drawer-section {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 3px 12px rgba(42, 78, 127, 0.05);
+  padding: 16px;
+}
+
+.plan-section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 12px;
+}
+
+.plan-section-heading>span {
+  color: #29486f;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.plan-section-heading small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.plan-progress-heading {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.plan-progress-heading strong {
+  color: var(--primary);
+  font-size: 12px;
+}
+
+.plan-drawer-body .test-plan-select {
+  width: 100%;
+  height: 38px;
+}
+
+.plan-drawer-body .execution-controls {
+  align-items: stretch;
+  width: 100%;
+}
+
+.plan-drawer-body .execution-control-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+
+.plan-drawer-body .execution-controls select,
+.plan-drawer-body .execution-controls input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+}
+
+.plan-drawer-body .create-plan-row> :not([hidden]) {
+  grid-column: 1 / -1;
+}
+
+.plan-drawer-body .create-plan-row .primary-button,
+.plan-drawer-body .completion-control-row .success-button {
+  min-height: 38px;
+}
+
+.plan-drawer-body .completion-control-row .success-button {
+  grid-column: 1 / -1;
+}
+
+.plan-drawer-body .execution-progress {
+  margin-top: 0;
+}
+
+.plan-drawer-body .execution-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.completion-section:has(.completion-control-row[hidden]) {
+  opacity: 0.72;
+}
+
+@media (max-width: 720px) {
+  .test-plan-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px 10px;
+  }
+
+  .test-plan-title {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .test-plan-manage {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .test-plan-current,
+  .test-plan-scope {
+    grid-column: 1 / -1;
+  }
+
+  .test-plan-current {
+    grid-row: 2;
+  }
+
+  .test-plan-scope {
+    grid-row: 3;
+  }
+
+  .test-plan-progress-overview .execution-stats {
+    grid-template-columns: repeat(2, minmax(96px, 1fr));
+  }
+
+  .plan-drawer-body .execution-control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-drawer-body .completion-control-row .success-button {
+    grid-column: 1;
+  }
+}
+
+.case-actions,
+.execution-actions {
+  justify-content: flex-start;
+}
+
+.execution-actions {
+  width: 100%;
+  max-width: 128px;
+}
+
+.case-actions .execution-select {
+  width: 100%;
+  min-width: 0;
+}
+
+@container case-list-card (max-width: 980px) {
+  .case-table-head> :nth-child(7) {
+    text-align: left;
+  }
+}
