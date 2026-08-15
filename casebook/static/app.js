@@ -159,6 +159,12 @@ function bindEvents() {
     updateExecutionStatus(executionSelect.dataset.caseId, executionSelect.value);
   });
   els.caseRows.addEventListener("click", (event) => {
+    const copyCaseIdButton = event.target.closest("button[data-copy-case-id]");
+    if (copyCaseIdButton) {
+      event.stopPropagation();
+      copyCaseId(copyCaseIdButton.dataset.copyCaseId);
+      return;
+    }
     const deleteScreenshotButton = event.target.closest("button[data-delete-screenshot]");
     if (deleteScreenshotButton) {
       event.stopPropagation();
@@ -806,7 +812,8 @@ function renderCaseRows() {
               </button>
             </div>
             <div class="case-id-cell">
-              <span class="case-id">${escapeHtml(caseItem.id)}</span>
+              <button class="case-id copy-case-id" type="button" data-copy-case-id="${escapeAttr(caseItem.id)}"
+                title="Copy case ID" aria-label="Copy case ID ${escapeAttr(caseItem.id)}">${escapeHtml(caseItem.id)}</button>
             </div>
             <div class="case-main-cell">
               <div class="case-title-line">
@@ -1385,6 +1392,37 @@ function testPlanDefaults() {
 
 function findCase(caseId) {
   return state.currentData?.cases.find((caseItem) => caseItem.id === caseId);
+}
+
+async function copyCaseId(caseId) {
+  if (!caseId) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(caseId);
+    } else {
+      fallbackCopyText(caseId);
+    }
+    showToast(`Copied ${caseId}`);
+  } catch (error) {
+    try {
+      fallbackCopyText(caseId);
+      showToast(`Copied ${caseId}`);
+    } catch (fallbackError) {
+      showToast(`Unable to copy ${caseId}`);
+    }
+  }
+}
+
+function fallbackCopyText(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Copy command was rejected");
 }
 
 function isMarked(caseId) {

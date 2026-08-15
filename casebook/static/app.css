@@ -1062,6 +1062,23 @@ body.resizing-sidebar .app-shell {
   white-space: nowrap;
 }
 
+.copy-case-id {
+  border: 0;
+  cursor: copy;
+  transition: background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.copy-case-id:hover {
+  background: #dceaff;
+  color: #2369cf;
+  box-shadow: 0 0 0 2px rgba(51, 119, 220, 0.08);
+}
+
+.copy-case-id:focus-visible {
+  outline: 2px solid rgba(51, 119, 220, 0.42);
+  outline-offset: 2px;
+}
+
 .case-title-line {
   display: flex;
   align-items: center;
