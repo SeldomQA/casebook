@@ -15,7 +15,13 @@
       <button class="app-bar-menu" id="sidebarToggle" type="button" aria-label="Toggle sidebar" aria-expanded="true">
         <span></span><span></span><span></span>
       </button>
-      <div class="app-brand">CASEBOOK</div>
+      <div class="app-brand">
+        <span class="app-brand-mark">C</span>
+        <span class="app-brand-copy">
+          <strong>Casebook</strong>
+          <small>Test quality workspace</small>
+        </span>
+      </div>
     </div>
     <div class="app-bar-right">
       <a class="github-link" href="https://github.com/SeldomQA/casebook" target="_blank" rel="noopener noreferrer"
@@ -49,6 +55,32 @@
     </aside>
 
     <main class="workspace">
+      <section class="dashboard-hero" aria-labelledby="workspaceTitle">
+        <div class="dashboard-hero-copy">
+          <p class="dashboard-kicker">AI-NATIVE TEST ENGINEERING</p>
+          <h1 id="workspaceTitle">Test case workspace</h1>
+          <p>Review test assets, focus risk, and track execution in one local workspace.</p>
+        </div>
+        <div class="dashboard-overview" aria-label="Project overview">
+          <div class="overview-stat overview-files">
+            <span>Files</span>
+            <strong id="overviewFiles">0</strong>
+          </div>
+          <div class="overview-stat overview-cases">
+            <span>Cases</span>
+            <strong id="overviewCases">0</strong>
+          </div>
+          <div class="overview-stat overview-risk">
+            <span>P0 risk</span>
+            <strong id="overviewP0">0</strong>
+          </div>
+          <div class="overview-stat overview-auto">
+            <span>Automated</span>
+            <strong id="overviewAuto">0</strong>
+          </div>
+        </div>
+      </section>
+
       <section class="notice" id="reloadNotice" hidden>
         <span>The YAML files changed while you were editing.</span>
         <button type="button" id="reloadNowButton">Reload now</button>

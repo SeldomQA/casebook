@@ -43,6 +43,10 @@ function bindElements() {
   [
     "scanDirs",
     "summaryText",
+    "overviewFiles",
+    "overviewCases",
+    "overviewP0",
+    "overviewAuto",
     "treePanel",
     "sidebarToggle",
     "sidebarResizer",
@@ -387,8 +391,13 @@ async function reloadAfterExternalChange(force) {
 
 function renderShell() {
   const summary = state.summary || {};
+  const stats = summary.stats || {};
   els.scanDirs.textContent = (summary.scan_dirs || []).join(", ") || "No scan directory";
   els.summaryText.textContent = `${summary.files || 0} files - ${summary.cases || 0} cases`;
+  els.overviewFiles.textContent = summary.files || 0;
+  els.overviewCases.textContent = summary.cases || 0;
+  els.overviewP0.textContent = stats.priorities?.P0 || 0;
+  els.overviewAuto.textContent = stats.auto_count || 0;
   els.treePanel.innerHTML = renderTree(state.tree, 0);
   markActiveTreeItem();
 }
