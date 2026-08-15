@@ -382,6 +382,233 @@ def render_export_html(data: dict[str, Any]) -> str:
     }}
     .mark-tag {{ color: var(--mark); background: var(--mark-soft); }}
     .empty {{ padding: 32px 18px; color: var(--muted); text-align: center; font-weight: 800; }}
+
+    /* Match the Casebook workspace's light SaaS dashboard visual language. */
+    :root {{
+      --canvas: #f3f7fd;
+      --surface: #ffffff;
+      --surface-soft: #f8fbff;
+      --line: #dfe8f4;
+      --line-soft: #eaf0f7;
+      --text: #203554;
+      --muted: #71839d;
+      --primary: #2f72e8;
+      --primary-soft: #edf4ff;
+      --mark: #7357d9;
+      --mark-soft: #f1edff;
+      --p0: #f2555a;
+      --p0-soft: #fff1f2;
+      --p1: #f2a23c;
+      --p1-soft: #fff8ed;
+      --p2: #3d83ed;
+      --p2-soft: #edf5ff;
+      --passed: #25b980;
+      --shadow: 0 3px 14px rgba(42, 78, 127, .055);
+    }}
+    body {{
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+    }}
+    .app-bar {{
+      min-height: 58px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .94);
+      color: var(--text);
+      box-shadow: 0 1px 10px rgba(42, 78, 127, .04);
+      backdrop-filter: blur(14px);
+    }}
+    .brand {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: 0;
+    }}
+    .brand-mark {{
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 9px;
+      background: linear-gradient(145deg, #4388f2, #2464d2);
+      color: #fff;
+      box-shadow: 0 6px 14px rgba(47, 114, 232, .24);
+      font-size: 14px;
+      font-weight: 900;
+    }}
+    .brand-copy {{ display: grid; gap: 1px; }}
+    .brand-copy strong {{ color: #1f4f91; font-size: 14px; line-height: 1.1; }}
+    .brand-copy small {{
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }}
+    .app-meta {{
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      padding: 5px 9px;
+      font-size: 11px;
+      font-weight: 800;
+    }}
+    .page {{ max-width: 1480px; padding: 28px 22px 56px; }}
+    .hero {{
+      position: relative;
+      align-items: center;
+      min-height: 160px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      border: 1px solid #dce8f8;
+      border-radius: 14px;
+      background: linear-gradient(115deg, #f8fbff 0%, #edf5ff 100%);
+      padding: 26px 28px;
+      box-shadow: var(--shadow);
+    }}
+    .hero::before,
+    .hero::after {{
+      content: "";
+      position: absolute;
+      border: 1px solid rgba(70, 132, 224, .12);
+      border-radius: 50%;
+      pointer-events: none;
+    }}
+    .hero::before {{ width: 210px; height: 210px; top: -105px; right: 22%; }}
+    .hero::after {{ width: 140px; height: 140px; top: -65px; right: 26%; }}
+    .hero-copy,
+    .stats {{ position: relative; z-index: 1; }}
+    .hero-kicker {{
+      margin: 0 0 7px;
+      color: #7191bb;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .16em;
+    }}
+    h1 {{
+      color: #245fae;
+      font-size: clamp(26px, 3vw, 38px);
+      letter-spacing: -.035em;
+    }}
+    .subtitle {{ color: #6f84a1; line-height: 1.55; }}
+    .stats {{
+      display: grid;
+      grid-template-columns: repeat(5, minmax(86px, 1fr));
+      gap: 9px;
+      min-width: min(100%, 520px);
+    }}
+    .stat {{
+      min-width: 0;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, .9);
+      padding: 12px 13px;
+      text-align: left;
+      box-shadow: 0 4px 14px rgba(47, 91, 150, .06);
+    }}
+    .stat strong {{ font-size: 23px; }}
+    .stat span {{
+      overflow: hidden;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 9px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    .stat-files {{ --stat-color: #526d91; --stat-soft: #fff; --stat-line: #dfe8f4; }}
+    .stat-cases {{ --stat-color: var(--primary); --stat-soft: #fff; --stat-line: #cfe0fb; }}
+    .stat-p0 {{ --stat-color: var(--p0); --stat-soft: #fff; --stat-line: #ffd7d9; }}
+    .stat-marked {{ --stat-color: var(--mark); --stat-soft: #fff; --stat-line: #d9cffc; }}
+    .stat-notes {{ --stat-color: var(--passed); --stat-soft: #fff; --stat-line: #c9efdf; }}
+    .toolbar {{
+      top: 68px;
+      margin-bottom: 16px;
+      border-radius: 12px;
+      padding: 11px 12px;
+      box-shadow: var(--shadow);
+    }}
+    .toolbar input,
+    .toolbar select {{
+      border-color: #d7e2ef;
+      border-radius: 7px;
+      background: #fbfdff;
+    }}
+    .button {{
+      border-color: #cddcf0;
+      border-radius: 7px;
+    }}
+    .button:hover {{ border-color: var(--primary); background: var(--primary-soft); }}
+    .button.primary {{
+      background: linear-gradient(135deg, #4389f4, #2f72e8);
+      box-shadow: 0 4px 10px rgba(47, 114, 232, .16);
+    }}
+    .file-card {{
+      margin-top: 16px;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+    }}
+    .file-header {{
+      padding: 18px 20px;
+      border-bottom-color: var(--line-soft);
+      background: linear-gradient(180deg, #fbfdff, #f8fbff);
+    }}
+    .file-header h2 {{ color: #29486f; font-size: 16px; }}
+    .file-path {{ color: #8aa0bc; }}
+    .pill {{
+      min-height: 22px;
+      border-radius: 5px;
+      background: #eef4fb;
+      color: #637c9d;
+      font-size: 10px;
+    }}
+    .file-count {{
+      border-radius: 7px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      padding: 6px 9px;
+      font-size: 11px;
+    }}
+    .case-table-head {{
+      background: #f7faff;
+      color: #8da0ba;
+      font-size: 10px;
+    }}
+    .case-card {{ position: relative; border-bottom-color: var(--line-soft); }}
+    .case-card::before {{
+      content: "";
+      position: absolute;
+      top: 10px;
+      bottom: 10px;
+      left: 0;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: transparent;
+    }}
+    .case-card.open {{ background: #fbfdff; }}
+    .case-card.open::before {{ background: var(--primary); }}
+    .case-summary {{ min-height: 60px; padding-top: 12px; padding-bottom: 12px; }}
+    .case-summary:hover {{ background: #f9fbfe; }}
+    .case-id {{ border-radius: 6px; font-size: 11px; }}
+    .case-title {{ color: #304c6d; font-size: 12px; }}
+    .case-description {{ color: #91a1b7; font-size: 11px; }}
+    .auto-pill,
+    .badge,
+    .tag {{ border-radius: 5px; font-size: 10px; }}
+    .badge {{ min-width: 38px; min-height: 20px; }}
+    .tag {{ background: #f0f5fc; color: #5b7395; }}
+    .mark-tag {{ background: var(--mark-soft); color: var(--mark); }}
+    .case-type-cell {{ color: #7890ac; font-size: 11px; }}
+    .case-action-text {{ color: #3e7fe0; font-size: 11px; }}
+    .case-body {{ background: #f7faff; }}
+    .detail-grid,
+    .review-panel {{
+      border-color: var(--line);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(42, 78, 127, .04);
+    }}
+    .review-panel textarea {{
+      border-color: #d7e2ef;
+      border-radius: 7px;
+      background: #fff;
+    }}
     @media (max-width: 1280px) {{
       .case-table-head,
       .case-summary {{
@@ -390,7 +617,13 @@ def render_export_html(data: dict[str, Any]) -> str:
       }}
     }}
     @media (max-width: 860px) {{
+      .app-bar {{ min-height: 54px; padding: 0 14px; }}
+      .brand-copy small {{ display: none; }}
+      .app-meta {{ max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+      .page {{ padding: 14px 12px 36px; }}
       .hero, .file-header, .case-body {{ grid-template-columns: 1fr; }}
+      .hero {{ min-height: 0; padding: 20px; }}
+      .stats {{ grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; justify-content: stretch; }}
       .case-table-head {{ display: none; }}
       .stats {{ justify-content: flex-start; }}
       .case-summary {{ grid-template-columns: 24px minmax(120px, 1fr); gap: 8px 12px; }}
@@ -407,12 +640,19 @@ def render_export_html(data: dict[str, Any]) -> str:
 </head>
 <body>
   <header class="app-bar">
-    <div class="brand">CASEBOOK EXPORT</div>
+    <div class="brand">
+      <span class="brand-mark">C</span>
+      <span class="brand-copy">
+        <strong>Casebook</strong>
+        <small>Portable review workspace</small>
+      </span>
+    </div>
     <div class="app-meta" id="generatedAt"></div>
   </header>
   <main class="page">
     <section class="hero">
-      <div>
+      <div class="hero-copy">
+        <p class="hero-kicker">TEST CASE REVIEW</p>
         <h1 id="pageTitle"></h1>
         <p class="subtitle" id="subtitle"></p>
       </div>
