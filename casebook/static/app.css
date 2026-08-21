@@ -3372,3 +3372,17 @@ body.sidebar-collapsed .app-shell {
     grid-row: 5;
   }
 }
+
+@media (min-width: 981px) {
+  .case-details {
+    align-items: stretch;
+  }
+
+  .case-details-card {
+    height: 100%;
+  }
+
+  .case-side-panel {
+    align-self: stretch;
+  }
+}
