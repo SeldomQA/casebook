@@ -227,7 +227,7 @@ function bindEvents() {
   els.screenshotViewerBackdrop.addEventListener("click", closeScreenshotViewer);
   els.screenshotViewerClose.addEventListener("click", closeScreenshotViewer);
   els.saveCaseButton.addEventListener("click", saveCase);
-  els.addCaseToPlanButton.addEventListener("click", addCurrentCaseToPlan);
+  els.addCaseToPlanButton?.addEventListener("click", addCurrentCaseToPlan);
   els.caseForm.addEventListener("input", (event) => {
     if (event.target.closest(".case-plan-assignment")) return;
     state.dirty = true;
@@ -1071,6 +1071,7 @@ function fillDrawer(caseItem) {
 }
 
 function renderCasePlanAssignment(caseItem) {
+  if (!els.casePlanSelect || !els.addCaseToPlanButton || !els.casePlanMembership) return;
   const memberships = plansForCase(caseItem);
   const memberIds = new Set(memberships.map((run) => run.id));
   const available = (state.runs || []).filter(
@@ -1088,7 +1089,7 @@ function renderCasePlanAssignment(caseItem) {
 }
 
 async function addCurrentCaseToPlan() {
-  if (!state.currentData || !state.selectedCaseId) return;
+  if (!state.currentData || !state.selectedCaseId || !els.casePlanSelect) return;
   const runId = els.casePlanSelect.value;
   if (!runId) {
     showToast("Select an active test plan");
