@@ -3242,3 +3242,17 @@ body.sidebar-collapsed .app-shell {
     text-align: left;
   }
 }
+
+@media (min-width: 981px) {
+  .case-details {
+    align-items: stretch;
+  }
+
+  .case-details-card {
+    height: 100%;
+  }
+
+  .case-side-panel {
+    align-self: stretch;
+  }
+}
