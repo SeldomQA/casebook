@@ -256,7 +256,12 @@ def create_app(
         current_run_id = payload.get(
             "current_run_id") or payload.get("currentRunId")
         if current_run_id:
-            return jsonify({"error": "Case IDs cannot be updated while a test plan is selected"}), 409
+            try:
+                current_run = runs.get_run(str(current_run_id), scope=store.scan_dirs)
+            except RunNotFoundError:
+                return jsonify({"error": f"Test run not found: {current_run_id}"}), 404
+            if str((current_run.get("run") or {}).get("status") or "").lower() != "in_progress":
+                return jsonify({"error": "Completed test plans cannot be updated"}), 409
         try:
             result = renumberer.renumber_file(
                 file_path, mtime_ns=payload.get("mtime_ns"))
@@ -268,6 +273,17 @@ def create_app(
             status = 409 if code == "edit_conflict" else 400
             return jsonify({"error": str(exc), "code": code}), status
         updated_marks = marks.remap_case_ids(file_path, result["mapping"])
+        run_sync = None
+        if current_run_id:
+            try:
+                run_sync = runs.reconcile_case_ids(
+                    str(current_run_id),
+                    file_path,
+                    result["mapping"],
+                    scope=store.scan_dirs,
+                )
+            except (InvalidRunError, RunNotFoundError) as exc:
+                return jsonify({"error": str(exc)}), 409
         summary = refresh_and_publish("renumber")
         broker.publish({
             "type": "marks",
@@ -278,6 +294,7 @@ def create_app(
             "result": result,
             "marks": updated_marks,
             "summary": summary,
+            "run_sync": run_sync,
         })
 
     @app.get("/api/marks")
@@ -381,6 +398,36 @@ def create_app(
             return jsonify(runs.get_run(run_id, scope=store.scan_dirs))
         except RunNotFoundError:
             return jsonify({"error": f"Test run not found: {run_id}"}), 404
+
+    @app.post("/api/test-runs/<run_id>/cases")
+    def api_add_case_to_test_run(run_id: str) -> ResponseReturnValue:
+        payload = request.get_json(silent=True) or {}
+        file_path = str(payload.get("file_path") or "").strip()
+        case_id = str(payload.get("case_id") or "").strip()
+        case_key = runs.key(file_path, case_id)
+        if not file_path or not case_id:
+            return jsonify({"error": "Missing file_path or case_id"}), 400
+        if case_key not in set(current_case_keys()):
+            return jsonify({"error": f"Case not found: {case_id}"}), 404
+        try:
+            result = runs.add_case_to_run(
+                run_id,
+                file_path,
+                case_id,
+                scope=store.scan_dirs,
+            )
+        except RunNotFoundError:
+            return jsonify({"error": f"Test run not found: {run_id}"}), 404
+        except InvalidRunError as exc:
+            return jsonify({"error": str(exc)}), 409
+        broker.publish({
+            "type": "test_run",
+            "action": "case_added",
+            "run_id": run_id,
+            "file_path": file_path,
+            "case_id": case_id,
+        })
+        return jsonify(result)
 
     @app.get("/reports/<path:filename>")
     def report_file(filename: str) -> ResponseReturnValue:

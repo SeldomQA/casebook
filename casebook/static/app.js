@@ -106,6 +106,9 @@ function bindElements() {
     "fieldPreconditions",
     "fieldSteps",
     "fieldExpectedResults",
+    "casePlanSelect",
+    "addCaseToPlanButton",
+    "casePlanMembership",
     "saveCaseButton",
     "toast",
   ].forEach((id) => {
@@ -224,7 +227,9 @@ function bindEvents() {
   els.screenshotViewerBackdrop.addEventListener("click", closeScreenshotViewer);
   els.screenshotViewerClose.addEventListener("click", closeScreenshotViewer);
   els.saveCaseButton.addEventListener("click", saveCase);
-  els.caseForm.addEventListener("input", () => {
+  els.addCaseToPlanButton.addEventListener("click", addCurrentCaseToPlan);
+  els.caseForm.addEventListener("input", (event) => {
+    if (event.target.closest(".case-plan-assignment")) return;
     state.dirty = true;
   });
   window.addEventListener("hashchange", () => {
@@ -632,12 +637,14 @@ function renderExecutionPanel() {
 
 function syncRenumberButton() {
   if (!els.renumberIdsButton) return;
-  const inTestPlanMode = Boolean(state.currentRunId);
-  const disabled = !state.currentData || inTestPlanMode;
+  const completedPlan = Boolean(state.currentRunId && state.currentRun?.run?.status === "completed");
+  const disabled = !state.currentData || completedPlan;
   els.renumberIdsButton.disabled = disabled;
-  els.renumberIdsButton.title = inTestPlanMode
-    ? "Case IDs cannot be updated while a test plan is selected"
-    : "Update case IDs using the current YAML order";
+  els.renumberIdsButton.title = completedPlan
+    ? "Completed test plans cannot be updated"
+    : state.currentRunId
+      ? "Update IDs and preserve execution results in the current test plan"
+      : "Update case IDs using the current YAML order";
 }
 
 function runOptionLabel(run) {
@@ -827,6 +834,7 @@ function renderCaseRows() {
             </div>
             <div class="case-type-cell">${escapeHtml(caseItem.type)}</div>
             <div class="case-tags-cell"><div class="tag-list">${tags}</div></div>
+            <div class="case-plans-cell">${renderCasePlans(caseItem)}</div>
             <div class="case-actions">
               ${state.currentRun ? renderExecutionActions(caseItem.id, execStatus) : ""}
               ${state.currentRun ? "" : `<button class="text-action" type="button" data-edit-case="1" data-case-id="${escapeAttr(caseItem.id)}">Edit</button>`}
@@ -837,6 +845,23 @@ function renderCaseRows() {
     });
   els.caseRows.innerHTML = rows.join("");
   els.noResults.hidden = rows.length > 0;
+}
+
+function plansForCase(caseItem) {
+  if (!state.currentData || !caseItem) return [];
+  const key = markKey(state.currentData.path, caseItem.id);
+  return (state.runs || []).filter(
+    (run) => Array.isArray(run.case_scope) && run.case_scope.includes(key),
+  );
+}
+
+function renderCasePlans(caseItem) {
+  const plans = plansForCase(caseItem);
+  if (!plans.length) return `<span class="case-plan-empty">—</span>`;
+  return `<div class="case-plan-list">${plans.map((run) => `
+    <span class="case-plan-pill${run.status === "completed" ? " completed" : ""}" title="${escapeAttr(run.name || run.id)}">
+      ${escapeHtml(run.name || run.id)}
+    </span>`).join("")}</div>`;
 }
 
 function renderCaseDetails(caseItem) {
@@ -1041,7 +1066,50 @@ function fillDrawer(caseItem) {
   els.fieldPreconditions.value = (caseItem.preconditions || []).join("\n");
   els.fieldSteps.value = (caseItem.steps || []).join("\n");
   els.fieldExpectedResults.value = (caseItem.expected_results || []).join("\n");
+  renderCasePlanAssignment(caseItem);
   state.dirty = false;
+}
+
+function renderCasePlanAssignment(caseItem) {
+  const memberships = plansForCase(caseItem);
+  const memberIds = new Set(memberships.map((run) => run.id));
+  const available = (state.runs || []).filter(
+    (run) => run.status === "in_progress" && !memberIds.has(run.id),
+  );
+  els.casePlanSelect.innerHTML = [
+    `<option value="">Select an active plan</option>`,
+    ...available.map((run) => `<option value="${escapeAttr(run.id)}">${escapeHtml(runOptionLabel(run))}</option>`),
+  ].join("");
+  els.casePlanSelect.disabled = !available.length;
+  els.addCaseToPlanButton.disabled = !available.length;
+  els.casePlanMembership.textContent = memberships.length
+    ? `Included in: ${memberships.map((run) => run.name || run.id).join(", ")}`
+    : "Not included in a test plan.";
+}
+
+async function addCurrentCaseToPlan() {
+  if (!state.currentData || !state.selectedCaseId) return;
+  const runId = els.casePlanSelect.value;
+  if (!runId) {
+    showToast("Select an active test plan");
+    return;
+  }
+  try {
+    const response = await api(`/api/test-runs/${encodeURIComponent(runId)}/cases`, {
+      method: "POST",
+      body: JSON.stringify({
+        file_path: state.currentData.path,
+        case_id: state.selectedCaseId,
+      }),
+    });
+    await refreshAll();
+    const selected = findCase(state.selectedCaseId);
+    if (selected) renderCasePlanAssignment(selected);
+    renderCaseRows();
+    showToast(response.added ? "Case added to test plan" : "Case is already in this test plan");
+  } catch (error) {
+    showToast(error.message);
+  }
 }
 
 async function saveCase() {
@@ -1082,11 +1150,14 @@ async function saveCase() {
 
 async function renumberCurrentFile() {
   if (!state.currentData) return;
-  if (state.currentRunId) {
-    showToast("Case IDs cannot be updated while a test plan is selected");
+  if (state.currentRunId && state.currentRun?.run?.status === "completed") {
+    showToast("Completed test plans cannot be updated");
     return;
   }
-  const confirmed = window.confirm("Update case IDs using the current YAML order? The case order will not change.");
+  const message = state.currentRunId
+    ? "Update case IDs and synchronize this file with the current test plan? Existing execution results will be retained by case mapping."
+    : "Update case IDs using the current YAML order? The case order will not change.";
+  const confirmed = window.confirm(message);
   if (!confirmed) return;
 
   const filePath = state.currentData.path;
@@ -1099,13 +1170,18 @@ async function renumberCurrentFile() {
       }),
     });
     state.marks = response.marks || state.marks;
+    if (response.run_sync?.run) state.currentRun = response.run_sync.run;
     state.expandedCaseIds = new Set();
     if (state.selectedCaseId) closeDrawer();
     await refreshAll();
     await loadFile(filePath, { keepFilter: true });
     const changed = Number(response.result?.changed || 0);
     const total = Number(response.result?.total || 0);
-    showToast(changed ? `Updated ${changed}/${total} case IDs` : "Case IDs are already sequential");
+    const removed = Number(response.run_sync?.removed_results || 0);
+    const planNote = response.run_sync
+      ? `; plan synchronized${removed ? `, removed ${removed} deleted result${removed === 1 ? "" : "s"}` : ""}`
+      : "";
+    showToast(changed ? `Updated ${changed}/${total} case IDs${planNote}` : `Case IDs are already sequential${planNote}`);
   } catch (error) {
     showToast(error.message);
   }

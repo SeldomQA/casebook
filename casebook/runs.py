@@ -370,6 +370,112 @@ class TestRunStore:
         """Build the canonical execution key used in run JSON files."""
         return f"{file_path}#{case_id}"
 
+    def add_case_to_run(
+        self,
+        run_id: str,
+        file_path: str,
+        case_id: str,
+        scope: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Add an existing YAML case to an active test plan."""
+        with self._lock:
+            data = self._load(run_id)
+            expected_scope = self._normalize_scope(scope)
+            run = data.get("run") or {}
+            if not isinstance(run, dict):
+                raise InvalidRunError("Invalid test plan data.")
+            if expected_scope is not None and self._normalize_scope(run.get("scope")) != expected_scope:
+                raise RunNotFoundError(run_id)
+            if str(run.get("status") or "").lower() != "in_progress":
+                raise InvalidRunError("Completed test plans cannot be updated.")
+
+            case_key = self.key(file_path, case_id)
+            case_scope = self._run_case_scope(data) or []
+            added = case_key not in case_scope
+            if added:
+                case_scope.append(case_key)
+                run["case_scope"] = self._normalize_case_scope(case_scope)
+                self._save(run_id, data)
+            return {"run": data, "key": case_key, "added": added}
+
+    def reconcile_case_ids(
+        self,
+        run_id: str,
+        file_path: str,
+        mapping: list[dict[str, Any]],
+        scope: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Sync one file in an active plan while retaining mapped results."""
+        with self._lock:
+            data = self._load(run_id)
+            expected_scope = self._normalize_scope(scope)
+            run = data.get("run") or {}
+            if not isinstance(run, dict):
+                raise InvalidRunError("Invalid test plan data.")
+            if expected_scope is not None and self._normalize_scope(run.get("scope")) != expected_scope:
+                raise RunNotFoundError(run_id)
+            if str(run.get("status") or "").lower() != "in_progress":
+                raise InvalidRunError("Completed test plans cannot be updated.")
+
+            id_mapping = {
+                str(item.get("old_id") or "").strip(): str(item.get("new_id") or "").strip()
+                for item in mapping
+                if str(item.get("old_id") or "").strip()
+                and str(item.get("new_id") or "").strip()
+            }
+            file_prefix = f"{file_path}#"
+            existing_results = data.get("results") or {}
+            if not isinstance(existing_results, dict):
+                existing_results = {}
+            next_results: dict[str, Any] = {}
+            retained_results = 0
+            removed_results = 0
+            for key, result in existing_results.items():
+                key_text = str(key)
+                if not key_text.startswith(file_prefix):
+                    next_results[key_text] = result
+                    continue
+                old_id = key_text[len(file_prefix):]
+                new_id = id_mapping.get(old_id)
+                if not new_id:
+                    removed_results += 1
+                    continue
+                next_results[self.key(file_path, new_id)] = result
+                retained_results += 1
+            data["results"] = next_results
+
+            existing_scope = self._run_case_scope(data) or []
+            scoped_target_ids = {
+                str(key)[len(file_prefix):]
+                for key in existing_scope
+                if str(key).startswith(file_prefix)
+            }
+            target_keys = [
+                self.key(file_path, str(item.get("new_id") or ""))
+                for item in mapping
+                if str(item.get("old_id") or "") in scoped_target_ids
+                and str(item.get("new_id") or "")
+            ]
+            next_scope: list[str] = []
+            inserted_target = False
+            for key in existing_scope:
+                if str(key).startswith(file_prefix):
+                    if not inserted_target:
+                        next_scope.extend(target_keys)
+                        inserted_target = True
+                    continue
+                next_scope.append(key)
+            if not inserted_target:
+                next_scope.extend(target_keys)
+            run["case_scope"] = self._normalize_case_scope(next_scope)
+            self._save(run_id, data)
+            return {
+                "run": data,
+                "retained_results": retained_results,
+                "removed_results": removed_results,
+                "case_total": len(run["case_scope"]),
+            }
+
     def untested_case_keys(
         self,
         data: dict[str, Any],

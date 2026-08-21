@@ -28,7 +28,7 @@ class CaseIdRenumberer:
         self.yaml.width = 4096
 
     def renumber_file(self, file_path: str, mtime_ns: int | str | None = None) -> dict[str, Any]:
-        """Renumber one YAML file from its first case ID and return an ID mapping."""
+        """Renumber each ID prefix independently and return an ID mapping."""
         try:
             target = resolve_project_path(self.project_root, file_path)
         except ValueError as exc:
@@ -47,28 +47,38 @@ class CaseIdRenumberer:
         if not isinstance(test_cases, list) or not test_cases:
             raise CaseIdRenumberError("No test cases found in this file.")
 
-        first_case = test_cases[0] or {}
-        first_id = str(first_case.get("id") or "").strip()
-        match = CASE_ID_PATTERN.match(first_id)
-        if not match:
-            raise CaseIdRenumberError(
-                f"First case ID is not renumberable: {first_id or 'empty'}")
-
-        prefix = match.group("prefix")
-        start = int(match.group("number"))
-        width = len(match.group("number"))
         mapping: list[dict[str, Any]] = []
+        prefix_sequences: dict[str, dict[str, int]] = {}
         changed = 0
 
-        # The first ID defines both the textual prefix and the numeric width.
-        # This keeps inserted cases adjacent while restoring review-friendly IDs.
+        # Each prefix uses the number and width from its first occurrence. Cases
+        # with the same prefix share one sequence even when another prefix sits
+        # between them in the YAML order.
         for index, case in enumerate(test_cases):
             if not isinstance(case, dict):
                 raise CaseIdRenumberError(
                     f"Case at position {index + 1} is not an object.")
             old_value = case.get("id", "")
             old_id = str(old_value or "").strip()
-            new_id = f"{prefix}{start + index:0{width}d}"
+            match = CASE_ID_PATTERN.match(old_id)
+            if not match:
+                raise CaseIdRenumberError(
+                    f"Case ID at position {index + 1} is not renumberable: {old_id or 'empty'}"
+                )
+
+            prefix = match.group("prefix")
+            number = match.group("number")
+            sequence = prefix_sequences.setdefault(
+                prefix,
+                {
+                    "start": int(number),
+                    "width": len(number),
+                    "offset": 0,
+                },
+            )
+            new_number = sequence["start"] + sequence["offset"]
+            new_id = f"{prefix}{new_number:0{sequence['width']}d}"
+            sequence["offset"] += 1
             mapping.append({
                 "index": index,
                 "old_id": old_id,

@@ -3243,16 +3243,132 @@ body.sidebar-collapsed .app-shell {
   }
 }
 
-@media (min-width: 981px) {
-  .case-details {
-    align-items: stretch;
+/* Plan membership is visible beside each case and editable from the case drawer. */
+.case-table-head,
+.case-summary {
+  grid-template-columns:
+    24px minmax(120px, 150px) minmax(320px, 2.2fr) minmax(62px, 0.34fr) minmax(76px, 0.4fr) minmax(96px, 0.5fr) minmax(120px, 0.65fr) minmax(84px, 0.4fr);
+}
+
+.case-plans-cell {
+  min-width: 0;
+  overflow: hidden;
+  padding-top: 2px;
+}
+
+.case-plan-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.case-plan-pill {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-plan-pill.completed {
+  background: #eef2f7;
+  color: var(--muted);
+}
+
+.case-plan-empty {
+  color: #a5b2c5;
+}
+
+.case-plan-assignment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  margin-top: 6px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 14px;
+}
+
+.case-plan-assignment label {
+  display: block;
+}
+
+.case-plan-assignment .outline-button {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.case-plan-membership {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@container case-list-card (max-width: 980px) {
+
+  .case-table-head,
+  .case-summary {
+    grid-template-columns: 24px minmax(120px, 150px) minmax(220px, 1fr) minmax(62px, 72px) minmax(88px, 0.45fr) minmax(100px, 0.55fr) minmax(64px, 76px);
   }
 
-  .case-details-card {
-    height: 100%;
+  .case-table-head> :nth-child(6),
+  .case-tags-cell {
+    grid-column: 5;
+    grid-row: 1;
   }
 
-  .case-side-panel {
-    align-self: stretch;
+  .case-table-head> :nth-child(7),
+  .case-plans-cell {
+    display: block;
+    grid-column: 6;
+    grid-row: 1;
+    align-self: start;
+    padding-top: 0;
+  }
+
+  .case-table-head> :nth-child(8),
+  .case-actions {
+    grid-column: 7;
+    grid-row: 1;
+    text-align: left;
+  }
+}
+
+@container case-list-card (max-width: 640px) {
+
+  .case-table-head,
+  .case-summary {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+  }
+
+  .case-table-head> :nth-child(1) {
+    grid-row: 1 / 6;
+  }
+
+  .case-table-head> :nth-child(8),
+  .case-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .case-table-head> :nth-child(6),
+  .case-tags-cell {
+    grid-column: 2 / 4;
+    grid-row: 4;
+  }
+
+  .case-table-head> :nth-child(7),
+  .case-plans-cell {
+    grid-column: 2 / 4;
+    grid-row: 5;
   }
 }

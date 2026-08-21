@@ -137,6 +137,7 @@
               <span>Priority</span>
               <span>Type</span>
               <span>Tags</span>
+              <span>Plans</span>
               <span>Actions</span>
             </div>
             <div class="case-list" id="caseRows"></div>
@@ -263,6 +264,14 @@
         <span>automated case</span>
         <input id="fieldAuto" type="checkbox">
       </label>
+      <div class="case-plan-assignment">
+        <label>
+          <span>add to plan</span>
+          <select id="casePlanSelect" aria-label="Select a test plan"></select>
+        </label>
+        <button class="outline-button" id="addCaseToPlanButton" type="button">Add to plan</button>
+        <p class="case-plan-membership" id="casePlanMembership"></p>
+      </div>
     </form>
 
     <div class="drawer-actions">
