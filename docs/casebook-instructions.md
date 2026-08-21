@@ -1,6 +1,6 @@
 # Casebook 使用说明
 
-本文档承接 README 中不适合展开太长的使用细节，覆盖 AI Agent 生成用例、用例 ID 重排、静态 HTML 用例导出、测试计划、项目状态文件、HTML 测试报告和 AI Agent 生成测试过程记录。`0.8.0` 中，本地工作台、导出页面和测试报告统一为简报式设计，测试计划的管理与报告生成也整合进右侧抽屉。
+本文档承接 README 中不适合展开太长的使用细节，覆盖 AI Agent 生成用例、用例 ID 重排、静态 HTML 用例导出、测试计划、项目状态文件、HTML 测试报告和 AI Agent 生成测试过程记录。`0.8.0` 将本地工作台、导出页面和测试报告统一为简报式设计；`0.9.0` 进一步增加用例 ID 复制、计划归属、将已有用例加入计划、计划模式安全重排 ID、多前缀独立编号和启动目录校验。
 
 ## 使用 AI Agent 生成用例
 
@@ -56,6 +56,14 @@ releases/v1-auth/login.yaml
 casebook serve releases/v1-auth
 ```
 
+`casebook serve` 会在启动 Web 服务前校验每个扫描目录。目录不存在、路径无效或目标不是目录时会直接报错并退出。例如：
+
+```text
+casebook serve: directory not found: releases/v1-auth
+```
+
+不传目录时使用默认的 `releases`，并执行相同校验。这样可以尽早发现目录拼写错误，避免误以为一个空工作区已经正常启动。
+
 ### 生成后的检查清单
 
 AI Agent 完成修改后，建议做一次检查：
@@ -69,11 +77,54 @@ AI Agent 完成修改后，建议做一次检查：
 
 Casebook 的核心思路是：AI Agent 负责生成和维护 YAML，人负责评审、判断和执行。这样测试用例不再是散落在平台里的表格，而是可被 AI 理解、可被 schema 校验、可被 Git 管理的工程资产。
 
+## 用例评审与计划归属
+
+本地工作台负责评审和执行已有 YAML 用例，不提供在页面中新增 YAML 用例的入口。需要新增、删除、拆分或合并用例时，应把需求和目标用例 ID 交给 AI Agent，由 AI 直接修改 `releases/` 下的文件。
+
+`0.9.0` 中，用例 ID 显示为可复制按钮。点击 ID 后会写入剪贴板，便于准确告诉 AI 要修改哪条用例，避免只凭标题定位同名或相近场景。
+
+用例列表的 `Plans` 列展示该用例当前属于哪些测试计划：
+
+- 进行中的计划使用主要强调色。
+- 已完成计划继续展示为历史归属，但保持只读。
+- 没有计划归属时显示 `—`。
+
+要把已有用例加入计划：
+
+1. 确保当前没有选择测试计划，使工作台处于评审模式。
+2. 点击目标用例的 `Edit`。
+3. 在 `Add to plan` 下拉框中选择一个进行中的计划。
+4. 点击 `Add to plan`。
+
+下拉框不会显示已经包含该用例的计划，也不会显示已完成计划。加入操作只把 `文件路径#用例ID` 写入所选计划的 `case_scope`，不会修改 YAML；该用例在计划中从 `Untested` 开始，已有其他用例的执行结果保持不变。
+
+展开用例详情时，大屏布局会让左侧 Preconditions、Steps、Expected Results 卡片自动匹配右侧评审或执行面板高度。面板宽度不足时切换为上下排列，避免为了等高压缩内容。
+
 ## 用例 ID 重排
 
-用例评审阶段经常会删除、插入或调整用例。Casebook 推荐保持 YAML 中的用例顺序不变，只按当前文件顺序重新整理用例 ID。
+用例评审和执行阶段经常会由 AI Agent 删除、插入、拆分或调整用例。Casebook 推荐保持 YAML 中的用例顺序不变，再按当前文件顺序重新整理用例 ID。
 
-重排范围是当前 YAML 文件，不会跨文件处理。重排规则是以第一条用例 ID 为起点，例如第一条是 `TC_LOGIN_018`，后续用例会依次变成 `TC_LOGIN_019`、`TC_LOGIN_020`。
+重排范围是当前 YAML 文件，不会跨文件处理。`0.9.0` 支持一个文件中存在多种 ID 前缀：每种前缀以第一次出现的 ID 为起点，并保留第一次出现时的数字位数；同一前缀即使被其他前缀隔开，也会继续自己的编号序列。
+
+例如：
+
+```text
+TC_SUB_INVOICE_003
+TC_SUB_INVOICE_009
+TC_NOTFOUND_CONFIG_001
+TC_NOTFOUND_CONFIG_006
+TC_SUB_INVOICE_015
+```
+
+重排后会变成：
+
+```text
+TC_SUB_INVOICE_003
+TC_SUB_INVOICE_004
+TC_NOTFOUND_CONFIG_001
+TC_NOTFOUND_CONFIG_002
+TC_SUB_INVOICE_005
+```
 
 命令行重排：
 
@@ -84,12 +135,15 @@ casebook renumber releases/example/login.yaml
 本地工作台重排：
 
 - 打开某个 YAML 文件。
-- 确认当前没有选择测试计划。
 - 点击用例列表上方的 `ID sorting`。
+- 如果当前没有选择计划，只重排 YAML ID 并迁移该文件的 Mark 标记。
+- 如果选择了进行中的计划，Casebook 还会同步更新当前计划的 `case_scope` 和 `results`。
 
-测试计划模式下不支持 ID 重排。测试计划的执行结果以 `文件路径#用例ID` 记录，重排会导致执行结果和用例错位，因此页面会在选择测试计划后禁用 `ID 更新`。
+计划模式重排会根据旧 ID 到新 ID 的映射保留已有执行数据，包括状态、Notes、Actual Result、Defects、Screenshots 和执行时间。已从 YAML 删除的用例会退出当前计划范围；新生成但尚未明确加入计划的用例不会被自动吸收。已完成计划保持只读，因此不能进行 ID 重排。
 
 重排时，当前文件里的 Mark 标记会按旧 ID 到新 ID 自动迁移，避免评审标记丢失。
+
+> 计划迁移针对当前选中的进行中计划。如果同一批用例同时属于多个需要继续执行的计划，应在调整 YAML 和 ID 前先确认这些计划的维护策略，避免修改已冻结的历史范围。
 
 ## 静态 HTML 用例导出
 
@@ -183,7 +237,9 @@ casebook serve releases/v1-auth
 - Actions 列显示 `Passed`、`Failed`、`Blocked`、`Deferred` 等状态选择。
 - 展开用例后可以记录 Notes、Actual Result、Defects 和截图证据。
 - 主页面持续显示 Cases、Passed、Failed、Blocked、Deferred、Untested 统计。
-- `ID sorting` 在计划模式下禁用，避免用例 ID 与执行结果错位。
+- `ID sorting` 可同步重排当前 YAML 文件，并迁移当前计划的范围与既有执行结果；已完成计划会禁用该操作。
+
+如果 AI Agent 在计划执行过程中新增了一条 YAML 用例，该用例不会自动进入既有计划。先取消当前计划选择，打开新用例的 Edit 抽屉，通过 `Add to plan` 明确选择目标计划；再次进入计划后，新用例会以 `Untested` 状态出现。
 
 完成测试计划前，本轮 `case_scope` 内的每条用例都必须被处理过。也就是说，用例状态必须是 `passed`、`failed`、`blocked` 或 `deferred` 之一；仍然存在 `untested` 用例时，`Complete plan & generate report` 会拒绝完成。
 

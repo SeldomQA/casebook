@@ -140,6 +140,12 @@ casebook serve releases/example
 http://127.0.0.1:8089
 ```
 
+Casebook 会在启动前校验扫描目录。目录不存在、路径无效或目标不是目录时，会直接输出错误并退出，不再启动空工作区。例如：
+
+```text
+casebook serve: directory not found: releases/v1-auth
+```
+
 ### 3. 评审和轻量编辑用例
 
 ![Casebook 查看测试用例](./images/test-case.png)
@@ -149,12 +155,18 @@ http://127.0.0.1:8089
 - 按文件浏览 YAML 用例。
 - 按优先级、Mark 状态和关键词筛选用例。
 - 展开用例查看前置条件、步骤和预期结果。
+- 点击用例 ID 即可复制，方便把准确 ID 交给 AI Agent 继续修改对应用例。
 - 使用 Mark 标记需要关注或后续调整的用例。
 - 对已有用例做轻量编辑，并保存回 YAML 文件。
+- 通过 `Plans` 列查看用例所属计划；在 Edit 抽屉中可将已有用例加入指定的进行中计划。
 - 评审插入或删除用例后，使用 `ID sorting` 按当前 YAML 顺序重排用例 ID。
 
 > 如果评审后需要新增、删除、拆分或重构用例，推荐继续交给 AI Agent 修改 YAML，而不是在页面中逐条维护。
-> `ID sorting` 只适合评审阶段；选择测试计划后会禁用，避免执行结果和用例 ID 错位。
+> Casebook 的“加入计划”只修改计划范围，不会在页面中创建 YAML 用例。新用例仍应由 AI Agent 写入 `releases/`。
+
+同一 YAML 文件可以包含多种 ID 前缀。`ID sorting` 会按前缀分别编号，每种前缀以首次出现的编号和位数为起点。选择进行中的测试计划后仍可重排，当前计划中的 `case_scope` 和已有执行结果会随 ID 映射迁移；已完成计划不可重排。
+
+在大屏展开用例时，左侧 Preconditions、Steps、Expected Results 卡片会自动匹配右侧评审或执行面板的高度；窄屏保持上下排列。
 
 ### 4. 导出静态 HTML 用例包
 
@@ -200,6 +212,8 @@ casebook export releases/example --priority P0
 - 展开用例记录执行备注、实际结果、JIRA 缺陷链接和截图证据。
 - 在主页面查看执行进度条和统计数据；未选择计划时，进度区域自动隐藏。
 - 计划模式隐藏 Edit，只保留执行结果操作，避免执行过程中误改用例定义。
+- 未选择计划时，可从用例 Edit 抽屉选择一个进行中的计划并点击 `Add to plan`；新加入的用例从 `Untested` 开始。
+- 计划模式允许使用 `ID sorting` 整理当前文件的 ID，并保留当前计划中已执行用例的状态、备注、实际结果、缺陷和截图。
 - 所有用例处理完后，填写测试环境、测试人员和报告名称，点击 `Complete plan & generate report` 完成计划并生成报告。
 - 如果本轮范围内仍有 `Untested` 用例，计划不能完成，也不能生成最终报告。
 
@@ -254,6 +268,7 @@ casebook report test-runs/run-20260625093000-login-smoke.json --output reports/l
 README 只保留产品理念和快速旅程，完整教程放在独立文档中，避免首次阅读过长：
 
 - [使用 AI Agent 生成用例](./docs/casebook-instructions.md#使用-ai-agent-生成用例)
+- [用例评审与计划归属](./docs/casebook-instructions.md#用例评审与计划归属)
 - [用例 ID 重排](./docs/casebook-instructions.md#用例-id-重排)
 - [静态 HTML 用例导出](./docs/casebook-instructions.md#静态-html-用例导出)
 - [测试计划与用例执行](./docs/casebook-instructions.md#测试计划与用例执行)
