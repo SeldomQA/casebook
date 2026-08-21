@@ -77,6 +77,23 @@ def _serve_banner(
     return f"{CASEBOOK_BANNER}\n{line}\n{body}\n{line}"
 
 
+def _validate_serve_directories(project_root: Path, paths: list[str]) -> list[str]:
+    """Normalize and validate every directory before starting the server."""
+    from .scanner import normalize_scan_dirs, resolve_project_path
+
+    scan_dirs = normalize_scan_dirs(project_root, paths)
+    for scan_dir in scan_dirs:
+        try:
+            target = resolve_project_path(project_root, scan_dir)
+        except ValueError as exc:
+            raise ValueError(f"invalid directory: {scan_dir}") from exc
+        if not target.exists():
+            raise ValueError(f"directory not found: {scan_dir}")
+        if not target.is_dir():
+            raise ValueError(f"not a directory: {scan_dir}")
+    return scan_dirs
+
+
 @app.callback()
 def root(
     version: Annotated[
@@ -115,13 +132,18 @@ def serve_project(
                        self.log_date_time_string(), message % args)
 
     project_root = Path.cwd()
+    try:
+        scan_dirs = _validate_serve_directories(project_root, paths)
+    except ValueError as exc:
+        typer.echo(f"casebook serve: {exc}", err=True)
+        raise typer.Exit(1) from exc
     flask_app = create_app(project_root=project_root,
-                           scan_dirs=paths, watch=watch)
+                           scan_dirs=scan_dirs, watch=watch)
     summary = flask_app.config.get("CASEBOOK_INITIAL_SUMMARY", {})
     url = f"http://{host}:{port}"
     browser_url = f"http://localhost:{port}" if host in {
         "127.0.0.1", "::"} else url
-    scan_dirs = summary.get("scan_dirs", paths or [])
+    scan_dirs = summary.get("scan_dirs", scan_dirs)
 
     typer.echo(_serve_banner(
         url=url,
