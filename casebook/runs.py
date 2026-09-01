@@ -10,6 +10,7 @@ from typing import Any
 
 EXECUTION_STATUSES = {"passed", "failed", "blocked", "deferred"}
 RUN_MODES = {"full", "retest_unresolved"}
+RUN_SCHEMA_VERSION = "2.0"
 
 
 class RunNotFoundError(Exception):
@@ -75,11 +76,14 @@ class TestRunStore:
         mode: str | None = None,
         source_run_id: str | None = None,
         case_scope: list[str] | None = None,
+        cases: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a full or retest plan with an explicit case scope snapshot."""
         with self._lock:
             now = self._now()
-            run_name = str(name or "").strip() or f"Test Run {now[:19]}"
+            run_name = str(name or "").strip()
+            if not run_name:
+                raise InvalidRunError("Test plan name is required.")
             run_id = self._unique_run_id(run_name, now)
             normalized_mode = str(mode or "full").strip().lower()
             if normalized_mode not in RUN_MODES:
@@ -89,6 +93,7 @@ class TestRunStore:
             normalized_case_scope = self._normalize_case_scope(
                 case_scope or [])
             data = {
+                "schema_version": RUN_SCHEMA_VERSION,
                 "run": {
                     "id": run_id,
                     "name": run_name,
@@ -101,6 +106,10 @@ class TestRunStore:
                     "started_at": now,
                     "completed_at": None,
                 },
+                "cases": self._normalize_case_snapshots(
+                    normalized_case_scope,
+                    cases,
+                ),
                 "results": {},
             }
             if source_run_id:
@@ -375,6 +384,7 @@ class TestRunStore:
         run_id: str,
         file_path: str,
         case_id: str,
+        case_snapshot: dict[str, Any] | None = None,
         scope: list[str] | None = None,
     ) -> dict[str, Any]:
         """Add an existing YAML case to an active test plan."""
@@ -387,7 +397,8 @@ class TestRunStore:
             if expected_scope is not None and self._normalize_scope(run.get("scope")) != expected_scope:
                 raise RunNotFoundError(run_id)
             if str(run.get("status") or "").lower() != "in_progress":
-                raise InvalidRunError("Completed test plans cannot be updated.")
+                raise InvalidRunError(
+                    "Completed test plans cannot be updated.")
 
             case_key = self.key(file_path, case_id)
             case_scope = self._run_case_scope(data) or []
@@ -395,6 +406,22 @@ class TestRunStore:
             if added:
                 case_scope.append(case_key)
                 run["case_scope"] = self._normalize_case_scope(case_scope)
+            changed = added
+            if self._is_v2(data):
+                snapshots = data.get("cases")
+                if not isinstance(snapshots, dict):
+                    snapshots = {}
+                if added or case_key not in snapshots:
+                    snapshots[case_key] = self._normalize_case_snapshot(
+                        case_key,
+                        case_snapshot,
+                    )
+                    data["cases"] = self._normalize_case_snapshots(
+                        run["case_scope"],
+                        snapshots,
+                    )
+                    changed = True
+            if changed:
                 self._save(run_id, data)
             return {"run": data, "key": case_key, "added": added}
 
@@ -415,7 +442,8 @@ class TestRunStore:
             if expected_scope is not None and self._normalize_scope(run.get("scope")) != expected_scope:
                 raise RunNotFoundError(run_id)
             if str(run.get("status") or "").lower() != "in_progress":
-                raise InvalidRunError("Completed test plans cannot be updated.")
+                raise InvalidRunError(
+                    "Completed test plans cannot be updated.")
 
             id_mapping = {
                 str(item.get("old_id") or "").strip(): str(item.get("new_id") or "").strip()
@@ -468,6 +496,33 @@ class TestRunStore:
             if not inserted_target:
                 next_scope.extend(target_keys)
             run["case_scope"] = self._normalize_case_scope(next_scope)
+            if self._is_v2(data):
+                existing_cases = data.get("cases") or {}
+                if not isinstance(existing_cases, dict):
+                    existing_cases = {}
+                next_cases: dict[str, Any] = {}
+                case_scope_set = set(run["case_scope"])
+                for key, snapshot in existing_cases.items():
+                    key_text = str(key)
+                    if not key_text.startswith(file_prefix):
+                        if key_text in case_scope_set:
+                            next_cases[key_text] = snapshot
+                        continue
+                    old_id = key_text[len(file_prefix):]
+                    new_id = id_mapping.get(old_id)
+                    if not new_id:
+                        continue
+                    new_key = self.key(file_path, new_id)
+                    if new_key not in case_scope_set:
+                        continue
+                    migrated = dict(snapshot) if isinstance(snapshot, dict) else {}
+                    migrated["file_path"] = file_path
+                    migrated["id"] = new_id
+                    next_cases[new_key] = migrated
+                data["cases"] = self._normalize_case_snapshots(
+                    run["case_scope"],
+                    next_cases,
+                )
             self._save(run_id, data)
             return {
                 "run": data,
@@ -610,6 +665,52 @@ class TestRunStore:
             if value and value not in normalized:
                 normalized.append(value)
         return normalized
+
+    def _normalize_case_snapshots(
+        self,
+        case_scope: list[str],
+        cases: Any,
+    ) -> dict[str, dict[str, Any]]:
+        """Return one stable, normalized case snapshot for every scoped key."""
+        source = cases if isinstance(cases, dict) else {}
+        return {
+            key: self._normalize_case_snapshot(key, source.get(key))
+            for key in case_scope
+        }
+
+    def _is_v2(self, data: dict[str, Any]) -> bool:
+        """Return whether a run owns stable case snapshots."""
+        return (
+            str(data.get("schema_version") or "") == RUN_SCHEMA_VERSION
+            and isinstance(data.get("cases"), dict)
+        )
+
+    def _normalize_case_snapshot(
+        self,
+        key: str,
+        snapshot: Any,
+    ) -> dict[str, Any]:
+        """Normalize the compact case definition stored with schema v2 runs."""
+        file_path, case_id = self._split_case_key(key)
+        value = snapshot if isinstance(snapshot, dict) else {}
+        raw_tags = value.get("tags") or []
+        if not isinstance(raw_tags, list):
+            raw_tags = [raw_tags]
+        return {
+            "file_path": str(value.get("file_path") or file_path),
+            "id": str(value.get("id") or case_id),
+            "title": str(value.get("title") or case_id or "Unknown case"),
+            "priority": str(value.get("priority") or "P2").upper(),
+            "type": str(value.get("type") or "unknown"),
+            "tags": [str(tag) for tag in raw_tags if str(tag).strip()],
+        }
+
+    def _split_case_key(self, key: str) -> tuple[str, str]:
+        """Split canonical file#case keys while tolerating legacy bare IDs."""
+        if "#" not in key:
+            return "", key
+        file_path, case_id = key.rsplit("#", 1)
+        return file_path, case_id
 
     def _result_counts(self, data: dict[str, Any]) -> dict[str, int]:
         """Count results, respecting retest case_scope when present."""

@@ -210,6 +210,12 @@ class CasebookCoreTests(unittest.TestCase):
             run = store.create_run(name="Round 1", scope=[
                                    "releases"], case_scope=case_keys)
             run_id = run["run"]["id"]
+            self.assertEqual(run["schema_version"], "2.0")
+            self.assertEqual(list(run["cases"]), case_keys)
+            self.assertEqual(
+                run["cases"][case_keys[0]]["id"],
+                "TC_LOGIN_001",
+            )
 
             store.update_result(run_id, "releases/login.yaml",
                                 "TC_LOGIN_001", status="passed")
@@ -253,12 +259,28 @@ class CasebookCoreTests(unittest.TestCase):
             app = create_app(project_root, scan_dirs=["releases"], watch=False)
             client = app.test_client()
 
+            unnamed = client.post(
+                "/api/test-runs",
+                json={"name": "   ", "mode": "full"},
+            )
+            self.assertEqual(unnamed.status_code, 400)
+            self.assertEqual(
+                unnamed.get_json()["error"],
+                "Test plan name is required.",
+            )
+
             first = client.post(
                 "/api/test-runs",
                 json={"name": "Round 1", "mode": "full"},
             )
             self.assertEqual(first.status_code, 201)
-            first_run_id = first.get_json()["run"]["id"]
+            first_data = first.get_json()
+            first_run_id = first_data["run"]["id"]
+            self.assertEqual(first_data["schema_version"], "2.0")
+            self.assertEqual(
+                first_data["cases"]["releases/login.yaml#TC_LOGIN_001"]["title"],
+                "Successful login",
+            )
 
             client.patch(
                 f"/api/test-runs/{first_run_id}/results",
@@ -428,6 +450,51 @@ class CasebookCoreTests(unittest.TestCase):
             self.assertIn("The page shows a generic error", report_html)
             self.assertIn("failure.png", report_html)
             self.assertNotIn("Locked user is blocked", report_html)
+
+            v2_run_file = project_root / "test-runs" / "run-report-v2.json"
+            v2_run_file.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "2.0",
+                        "run": {
+                            "id": "run-report-v2",
+                            "name": "Snapshot Report Run",
+                            "status": "completed",
+                            "mode": "full",
+                            "scope": ["releases"],
+                            "case_scope": [
+                                "releases/login.yaml#TC_LOGIN_001",
+                            ],
+                        },
+                        "cases": {
+                            "releases/login.yaml#TC_LOGIN_001": {
+                                "file_path": "releases/login.yaml",
+                                "id": "TC_LOGIN_001",
+                                "title": "Login title frozen at execution time",
+                                "priority": "P1",
+                                "type": "functional",
+                                "tags": ["login", "snapshot"],
+                            }
+                        },
+                        "results": {
+                            "releases/login.yaml#TC_LOGIN_001": {
+                                "status": "passed",
+                                "notes": "Generated from the v2 snapshot",
+                            }
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            v2_report_path = generate_report(
+                v2_run_file,
+                output_file=project_root / "report-v2.html",
+                project_root=project_root,
+            )
+            v2_report_html = v2_report_path.read_text(encoding="utf-8")
+            self.assertIn("Login title frozen at execution time", v2_report_html)
+            self.assertIn("Generated from the v2 snapshot", v2_report_html)
 
 
 if __name__ == "__main__":

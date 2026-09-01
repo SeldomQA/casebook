@@ -79,9 +79,9 @@ def create_app(
     initial_summary = store.refresh()
     app.config["CASEBOOK_INITIAL_SUMMARY"] = initial_summary
 
-    def current_case_keys() -> list[str]:
-        """Return canonical case keys for the currently loaded YAML scope."""
-        keys: list[str] = []
+    def current_case_snapshots() -> dict[str, dict[str, Any]]:
+        """Return compact v2 snapshots for every case in the active scope."""
+        snapshots: dict[str, dict[str, Any]] = {}
         for file_item in store.list_files():
             file_path = str(file_item.get("path") or "")
             if not file_path:
@@ -90,10 +90,23 @@ def create_app(
             if not entry:
                 continue
             for case in entry.get("cases") or []:
-                case_id = str(case.get("id") or "")
-                if case_id:
-                    keys.append(runs.key(file_path, case_id))
-        return keys
+                case_id = str(case.get("id") or "").strip()
+                if not case_id:
+                    continue
+                key = runs.key(file_path, case_id)
+                snapshots[key] = {
+                    "file_path": file_path,
+                    "id": case_id,
+                    "title": str(case.get("title") or case_id),
+                    "priority": str(case.get("priority") or "P2").upper(),
+                    "type": str(case.get("type") or "functional"),
+                    "tags": [str(tag) for tag in case.get("tags") or []],
+                }
+        return snapshots
+
+    def current_case_keys() -> list[str]:
+        """Return canonical case keys for the currently loaded YAML scope."""
+        return list(current_case_snapshots())
 
     def case_keys_for_run(run_id: str) -> list[str]:
         """Resolve the cases that must be considered for a test plan."""
@@ -257,7 +270,8 @@ def create_app(
             "current_run_id") or payload.get("currentRunId")
         if current_run_id:
             try:
-                current_run = runs.get_run(str(current_run_id), scope=store.scan_dirs)
+                current_run = runs.get_run(
+                    str(current_run_id), scope=store.scan_dirs)
             except RunNotFoundError:
                 return jsonify({"error": f"Test run not found: {current_run_id}"}), 404
             if str((current_run.get("run") or {}).get("status") or "").lower() != "in_progress":
@@ -337,7 +351,8 @@ def create_app(
         result = marks.update_mark(
             file_path=file_path,
             case_id=case_id,
-            needs_update=needs_update if needs_update is None else bool(needs_update),
+            needs_update=needs_update if needs_update is None else bool(
+                needs_update),
             notes=notes,
         )
         broker.publish({
@@ -358,9 +373,13 @@ def create_app(
         mode = str(payload.get("mode") or "full").strip().lower()
         if mode == "retest":
             mode = "retest_unresolved"
+        name = str(payload.get("name") or "").strip()
         source_run_id = str(payload.get("source_run_id")
                             or payload.get("sourceRunId") or "").strip()
         try:
+            if not name:
+                raise InvalidRunError("Test plan name is required.")
+            snapshots = current_case_snapshots()
             if mode == "retest_unresolved":
                 if not source_run_id:
                     raise InvalidRunError(
@@ -373,13 +392,18 @@ def create_app(
             else:
                 raise InvalidRunError(f"Invalid test plan mode: {mode}")
             result = runs.create_run(
-                name=payload.get("name"),
+                name=name,
                 scope=store.scan_dirs,
                 environment=payload.get("environment"),
                 tester=payload.get("tester"),
                 mode=mode,
                 source_run_id=source_run_id or None,
                 case_scope=case_scope,
+                cases={
+                    key: snapshots[key]
+                    for key in case_scope
+                    if key in snapshots
+                },
             )
         except RunNotFoundError:
             return jsonify({"error": f"Test run not found: {source_run_id}"}), 404
@@ -414,6 +438,7 @@ def create_app(
                 run_id,
                 file_path,
                 case_id,
+                case_snapshot=current_case_snapshots().get(case_key),
                 scope=store.scan_dirs,
             )
         except RunNotFoundError:
@@ -436,7 +461,8 @@ def create_app(
     @app.patch("/api/test-runs/<run_id>")
     def api_complete_test_run(run_id: str) -> ResponseReturnValue:
         payload = request.get_json(silent=True) or {}
-        report_name = str(payload.get("report_name") or payload.get("reportName") or "").strip()
+        report_name = str(payload.get("report_name")
+                          or payload.get("reportName") or "").strip()
         try:
             current = runs.get_run(run_id, scope=store.scan_dirs)
             current_run = current.get("run") or {}

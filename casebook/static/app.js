@@ -130,6 +130,7 @@ function bindEvents() {
   els.runSelect.addEventListener("change", () => selectRun(els.runSelect.value));
   els.runModeSelect.addEventListener("change", renderExecutionPanel);
   els.sourceRunSelect.addEventListener("change", renderExecutionPanel);
+  els.runNameInput.addEventListener("input", syncCreateRunButtonState);
   els.createRunButton.addEventListener("click", createRun);
   els.completeRunButton.addEventListener("click", completeRun);
   els.renumberIdsButton.addEventListener("click", renumberCurrentFile);
@@ -581,9 +582,7 @@ function renderExecutionPanel() {
   els.createRunButton.textContent = createMode === "retest_unresolved"
     ? "Create retest"
     : "Create plan";
-  els.createRunButton.title = createMode === "retest_unresolved"
-    ? "Create a new plan from the selected plan's failed, blocked, and deferred cases"
-    : "Create a full test plan for the current scope";
+  syncCreateRunButtonState();
   const isCompleted = run?.status === "completed";
   const canFinishRun = Boolean(state.currentRunId && stats.total > 0 && stats.untested === 0);
   const canCompleteRun = canFinishRun && !isCompleted;
@@ -1239,11 +1238,16 @@ async function selectRun(runId) {
 async function createRun() {
   const mode = els.runModeSelect.value || "full";
   const sourceRunId = mode === "retest_unresolved" ? els.sourceRunSelect.value : "";
+  const name = els.runNameInput.value.trim();
+  if (!name) {
+    syncCreateRunButtonState();
+    showToast("Enter a test plan name before creating the plan");
+    return;
+  }
   if (mode === "retest_unresolved" && !sourceRunId) {
     showToast("Select a source test plan before creating a retest plan");
     return;
   }
-  const name = els.runNameInput.value.trim() || defaultRunName();
   try {
     const response = await api("/api/test-runs", {
       method: "POST",
@@ -1408,16 +1412,20 @@ async function deleteExecutionScreenshot(screenshotId) {
   }
 }
 
-function defaultRunName() {
-  if (els.runModeSelect?.value === "retest_unresolved") {
-    const sourceRun = state.runs.find((item) => item.id === els.sourceRunSelect?.value);
-    if (sourceRun) {
-      return `${sourceRun.name || sourceRun.id} retest`;
-    }
+function syncCreateRunButtonState() {
+  const mode = els.runModeSelect.value || "full";
+  const hasName = Boolean(els.runNameInput.value.trim());
+  const hasSource = mode !== "retest_unresolved" || Boolean(els.sourceRunSelect.value);
+  els.createRunButton.disabled = !hasName || !hasSource;
+  if (!hasName) {
+    els.createRunButton.title = "Enter a test plan name";
+  } else if (!hasSource) {
+    els.createRunButton.title = "Select a source test plan";
+  } else {
+    els.createRunButton.title = mode === "retest_unresolved"
+      ? "Create a new plan from the selected plan's failed, blocked, and deferred cases"
+      : "Create a full test plan for the current scope";
   }
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10);
-  return `${scopeLabel()} ${date}`;
 }
 
 function toggleTestPlanPanel() {

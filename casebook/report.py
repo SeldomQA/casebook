@@ -75,7 +75,7 @@ def generate_report(
 
 
 def build_report_data(run_data: dict[str, Any], project_root: Path) -> dict[str, Any]:
-    """Merge run JSON with current YAML case definitions for report rendering."""
+    """Build report data from v2 snapshots or legacy YAML definitions."""
     run = run_data.get("run") or {}
     if not isinstance(run, dict):
         raise ReportError("Invalid run file: missing run object")
@@ -86,7 +86,18 @@ def build_report_data(run_data: dict[str, Any], project_root: Path) -> dict[str,
 
     scope = _normalize_scope(run.get("scope"))
     case_scope = _normalize_case_scope(run.get("case_scope"))
-    case_records = _collect_case_records(project_root, scope, results, case_scope)
+    case_snapshots = run_data.get("cases")
+    has_v2_snapshots = (
+        str(run_data.get("schema_version") or "") == "2.0"
+        and isinstance(case_snapshots, dict)
+    )
+    case_records = _collect_case_records(
+        project_root,
+        scope,
+        results,
+        case_scope,
+        case_snapshots if has_v2_snapshots else None,
+    )
     stats = _build_stats(case_records)
     failed_cases = [
         record for record in case_records if record.status == "failed"]
@@ -598,8 +609,32 @@ def _collect_case_records(
     scope: list[str],
     results: dict[str, Any],
     case_scope: list[str] | None = None,
+    case_snapshots: dict[str, Any] | None = None,
 ) -> list[CaseRecord]:
-    """Collect report records, including historical results for missing YAML cases."""
+    """Collect v2 snapshot records or fall back to legacy YAML discovery."""
+    if case_snapshots is not None:
+        snapshot_keys = (
+            case_scope
+            if case_scope is not None
+            else [str(key) for key in case_snapshots]
+        )
+        records = []
+        for key in snapshot_keys:
+            snapshot = case_snapshots.get(key)
+            file_path, case_id = _split_result_key(key)
+            case = dict(snapshot) if isinstance(snapshot, dict) else {}
+            case.setdefault("file_path", file_path)
+            case.setdefault("id", case_id)
+            case.setdefault("title", case_id or "Unknown case")
+            result = results.get(key) if isinstance(results.get(key), dict) else {}
+            records.append(_record_from_case(
+                file_path=str(case.get("file_path") or file_path),
+                case=case,
+                key=key,
+                result=result,
+            ))
+        return records
+
     store = CasebookStore(project_root=project_root, scan_dirs=scope or None)
     store.refresh()
 
