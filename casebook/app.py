@@ -494,14 +494,21 @@ def create_app(
                     output_file=output_path,
                     project_root=store.project_root,
                 )
+                generated_report = {
+                    "name": report_name,
+                    "filename": filename,
+                    "path": target.relative_to(store.project_root).as_posix(),
+                    "url": url_for("report_file", filename=filename),
+                }
+                result = runs.record_report(
+                    run_id=run_id,
+                    name=generated_report["name"],
+                    filename=generated_report["filename"],
+                    path=generated_report["path"],
+                    scope=store.scan_dirs,
+                )
             except (ReportError, OSError) as exc:
                 return jsonify({"error": f"Unable to generate report: {exc}"}), 500
-            generated_report = {
-                "name": report_name,
-                "filename": filename,
-                "path": target.relative_to(store.project_root).as_posix(),
-                "url": url_for("report_file", filename=filename),
-            }
         broker.publish({
             "type": "test_run",
             "action": "report_generated" if generated_report else "completed",

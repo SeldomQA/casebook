@@ -74,7 +74,7 @@ function bindElements() {
     "runEnvironmentInput",
     "runTesterInput",
     "reportNameInput",
-    "reportOutputLink",
+    "reportOutputList",
     "completeRunButton",
     "executionProgressBar",
     "executionProgressText",
@@ -610,11 +610,21 @@ function renderExecutionPanel() {
     : isCompleted
       ? "Generate a report for this completed test plan"
       : "Complete the test plan and generate its report";
-  els.reportOutputLink.hidden = !state.generatedReport;
-  els.reportOutputLink.href = state.generatedReport?.url || "#";
-  els.reportOutputLink.textContent = state.generatedReport
-    ? `Open ${state.generatedReport.name}`
-    : "Open generated report";
+  const reports = Array.isArray(run?.reports)
+    ? [...run.reports].sort((left, right) => String(left.name || left.filename || "")
+      .localeCompare(String(right.name || right.filename || "")))
+    : [];
+  els.reportOutputList.hidden = reports.length === 0;
+  els.reportOutputList.innerHTML = reports.length ? `
+    <span class="report-output-heading">Generated reports</span>
+    ${reports.map((report) => `
+    <a class="outline-button report-output-link"
+      href="/reports/${encodeURIComponent(report.filename || "")}" target="_blank"
+      rel="noopener noreferrer" title="Open ${escapeAttr(report.name || report.filename || "report")}">
+      ${escapeHtml(report.name || report.filename || "Report")}
+    </a>
+    `).join("")}
+  ` : "";
   els.completionHint.textContent = !state.currentRunId
     ? "Select a test plan first."
     : isCompleted

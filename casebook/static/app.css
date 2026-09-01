@@ -3147,8 +3147,19 @@ body.sidebar-collapsed .app-shell {
 }
 
 .plan-drawer-body .report-name-input,
-.plan-drawer-body .report-output-link {
+.plan-drawer-body .report-output-list {
   grid-column: 1 / -1;
+}
+
+.plan-drawer-body .report-output-list {
+  display: grid;
+  gap: 8px;
+}
+
+.plan-drawer-body .report-output-heading {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .plan-drawer-body .report-output-link {
@@ -3159,7 +3170,7 @@ body.sidebar-collapsed .app-shell {
   text-decoration: none;
 }
 
-.plan-drawer-body .report-output-link[hidden] {
+.plan-drawer-body .report-output-list[hidden] {
   display: none;
 }
 
@@ -3217,7 +3228,7 @@ body.sidebar-collapsed .app-shell {
   }
 
   .plan-drawer-body .report-name-input,
-  .plan-drawer-body .report-output-link {
+  .plan-drawer-body .report-output-list {
     grid-column: 1;
   }
 }

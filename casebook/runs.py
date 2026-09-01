@@ -425,6 +425,44 @@ class TestRunStore:
                 self._save(run_id, data)
             return {"run": data, "key": case_key, "added": added}
 
+    def record_report(
+        self,
+        run_id: str,
+        name: str,
+        filename: str,
+        path: str,
+        scope: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Add or replace one generated report record on a test plan."""
+        with self._lock:
+            data = self._load(run_id)
+            expected_scope = self._normalize_scope(scope)
+            run = data.get("run") or {}
+            if not isinstance(run, dict):
+                raise InvalidRunError("Invalid test plan data.")
+            if expected_scope is not None and self._normalize_scope(run.get("scope")) != expected_scope:
+                raise RunNotFoundError(run_id)
+
+            report = {
+                "name": str(name).strip(),
+                "filename": str(filename).strip(),
+                "path": str(path).strip(),
+                "generated_at": self._now(),
+            }
+            reports = run.get("reports") or []
+            if not isinstance(reports, list):
+                reports = []
+            next_reports = [
+                item
+                for item in reports
+                if isinstance(item, dict)
+                and str(item.get("filename") or "") != report["filename"]
+            ]
+            next_reports.append(report)
+            run["reports"] = next_reports
+            self._save(run_id, data)
+            return data
+
     def reconcile_case_ids(
         self,
         run_id: str,
