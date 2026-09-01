@@ -1,4 +1,5 @@
 const SIDEBAR_STORAGE_KEY = "casebook.sidebarWidth";
+const CURRENT_RUN_STORAGE_PREFIX = "casebook.currentRun";
 const SIDEBAR_MIN_WIDTH = 260;
 const SIDEBAR_MAX_WIDTH = 560;
 
@@ -346,9 +347,13 @@ async function refreshAll() {
   state.tree = tree;
   state.marks = marks;
   state.runs = runs;
+  if (!state.currentRunId) {
+    state.currentRunId = storedCurrentRunId();
+  }
   if (state.currentRunId && !state.runs.some((run) => run.id === state.currentRunId)) {
     state.currentRunId = null;
     state.currentRun = null;
+    persistCurrentRunId(null);
   }
   if (state.currentRunId) {
     state.currentRun = await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`);
@@ -392,6 +397,7 @@ function connectEvents() {
     if (state.currentRunId && !state.runs.some((run) => run.id === state.currentRunId)) {
       state.currentRunId = null;
       state.currentRun = null;
+      persistCurrentRunId(null);
     }
     if (state.currentRunId && data.run_id === state.currentRunId) {
       state.currentRun = state.currentRunId ? await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`) : null;
@@ -1226,8 +1232,11 @@ async function saveReviewDetails(caseId) {
 async function selectRun(runId) {
   state.generatedReport = null;
   els.reportNameInput.value = "";
-  state.currentRunId = runId || null;
-  state.currentRun = state.currentRunId ? await api(`/api/test-runs/${encodeURIComponent(state.currentRunId)}`) : null;
+  const nextRunId = runId || null;
+  const nextRun = nextRunId ? await api(`/api/test-runs/${encodeURIComponent(nextRunId)}`) : null;
+  state.currentRunId = nextRunId;
+  state.currentRun = nextRun;
+  persistCurrentRunId(state.currentRunId);
   if (state.currentRunId) state.testPlanExpanded = true;
   normalizeCurrentFilter();
   renderExecutionPanel();
@@ -1260,6 +1269,7 @@ async function createRun() {
     });
     state.currentRun = response;
     state.currentRunId = response.run.id;
+    persistCurrentRunId(state.currentRunId);
     state.generatedReport = null;
     els.reportNameInput.value = "";
     state.testPlanExpanded = true;
@@ -1425,6 +1435,35 @@ function syncCreateRunButtonState() {
     els.createRunButton.title = mode === "retest_unresolved"
       ? "Create a new plan from the selected plan's failed, blocked, and deferred cases"
       : "Create a full test plan for the current scope";
+  }
+}
+
+function currentRunStorageKey() {
+  const scope = (state.summary?.scan_dirs || [])
+    .map((item) => String(item || "").trim().replace(/[\\/]+$/, ""))
+    .filter(Boolean)
+    .join("|") || "default";
+  return `${CURRENT_RUN_STORAGE_PREFIX}:${scope}`;
+}
+
+function storedCurrentRunId() {
+  try {
+    return window.localStorage.getItem(currentRunStorageKey()) || null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function persistCurrentRunId(runId) {
+  try {
+    const key = currentRunStorageKey();
+    if (runId) {
+      window.localStorage.setItem(key, runId);
+    } else {
+      window.localStorage.removeItem(key);
+    }
+  } catch (_error) {
+    // Keep plan selection functional when browser storage is unavailable.
   }
 }
 
