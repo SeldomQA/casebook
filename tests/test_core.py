@@ -252,6 +252,27 @@ class CasebookCoreTests(unittest.TestCase):
                 1,
             )
 
+            with_report = store.record_report(
+                run_id,
+                name="Login report",
+                filename="Login-report.html",
+                path="reports/Login-report.html",
+                scope=["releases"],
+            )
+            replaced_report = store.record_report(
+                run_id,
+                name="Login report",
+                filename="Login-report.html",
+                path="reports/Login-report.html",
+                scope=["releases"],
+            )
+            self.assertEqual(len(with_report["run"]["reports"]), 1)
+            self.assertEqual(len(replaced_report["run"]["reports"]), 1)
+            self.assertEqual(
+                replaced_report["run"]["reports"][0]["name"],
+                "Login report",
+            )
+
     def test_app_retest_plan_uses_failed_blocked_and_deferred_cases(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
