@@ -855,7 +855,7 @@ def render_export_html(data: dict[str, Any]) -> str:
             <aside class="review-panel">
               <label class="mark-row">
                 <input type="checkbox" data-review-mark="${{escapeAttr(key)}}" ${{marked ? "checked" : ""}}>
-                <span>Needs update</span>
+                <span>Mark</span>
               </label>
               <textarea data-review-notes="${{escapeAttr(key)}}" placeholder="Describe what should be updated">${{escapeHtml(review.notes)}}</textarea>
             </aside>

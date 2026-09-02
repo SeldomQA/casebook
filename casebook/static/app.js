@@ -923,7 +923,7 @@ function renderReviewDetails(caseItem) {
     <aside class="review-panel">
       <label class="mark-row">
         <input type="checkbox" data-review-mark="1" data-case-id="${escapeAttr(caseItem.id)}"${marked ? " checked" : ""}>
-        <span>Needs update</span>
+        <span>Mark</span>
       </label>
       <textarea data-review-notes="${escapeAttr(caseItem.id)}" rows="5" placeholder="Describe what should be updated">${escapeHtml(mark.notes || "")}</textarea>
       <button class="outline-button review-save-button" type="button" data-save-review="1" data-case-id="${escapeAttr(caseItem.id)}">Save review</button>
