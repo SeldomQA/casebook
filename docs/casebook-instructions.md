@@ -200,7 +200,7 @@ casebook export releases/v1-auth --priority P0,P1
 - 用例 ID、标题、描述、优先级、类型和标签。
 - 前置条件、步骤和预期结果。
 - 页面内搜索、优先级筛选、标签筛选、展开/收起。
-- 每条用例的 `Needs update` 标记和评审备注。
+- 每条用例的 `Mark` 标记和评审备注。
 
 `0.8.0` 的导出页面采用与本地工作台一致的简报式布局，重点突出项目概览、风险、优先级分布和用例清单，同时支持宽屏与窄屏阅读。
 
@@ -216,6 +216,8 @@ test-runs/<run-id>.json
 
 测试计划不是必选项。用例评审时可以完全不启用测试计划；需要进入执行阶段时，点击顶部 `Manage plan` 打开右侧抽屉，在抽屉中创建或选择计划。主页面只展示当前计划摘要和执行进度；没有选择计划时，进度条与统计卡片自动隐藏。
 
+当前选择会按 `casebook serve <目录>` 的启动范围保存在浏览器本地。刷新页面后，Casebook 会自动恢复该范围上一次选择的计划；如果计划已被删除或不再属于当前范围，则自动回到未选择状态。手动选择 `Current plan: none` 会清除该范围的保存状态。
+
 测试计划绑定当前 `casebook serve <目录>` 的启动目录。比如：
 
 ```bash
@@ -224,7 +226,7 @@ casebook serve releases/v1-auth
 
 此时创建的测试计划只属于 `releases/v1-auth`，不会混入其他需求目录的计划。
 
-每个测试计划会记录名称、范围、模式、用例范围、开始时间、完成时间和每条用例的执行结果。执行过程中，最近一次执行、备注或缺陷链接更新时间会写入 `completed_at`；完成计划时，测试环境默认是 `Test environment`，测试人员默认来自当前启动范围内 YAML 文件的 `owner`，多个 owner 使用逗号分隔。
+每个测试计划会记录名称、范围、模式、用例范围、用例快照、开始时间、完成时间和每条用例的执行结果。执行过程中，最近一次执行、备注或缺陷链接更新时间会写入 `completed_at`；完成计划时，测试环境默认是 `Test environment`，测试人员默认来自当前启动范围内 YAML 文件的 `owner`，多个 owner 使用逗号分隔。
 
 创建测试计划时支持两种模式：
 
@@ -252,10 +254,13 @@ casebook serve releases/v1-auth
 
 如果 `reports/` 不存在，Casebook 会自动创建。已完成的计划仍可输入新的报告名称，点击 `Generate report` 重新生成，不会重复修改计划完成状态。
 
+每次成功生成后，报告名称、文件名、路径和生成时间会记录在对应测试计划的 `run.reports` 中，并在抽屉里按名称列出。再次输入同名报告会覆盖 `reports/` 中原有的 HTML，并更新原报告记录；不同名称则保留为多条可独立打开的报告。
+
 用例结果以 `文件路径#用例ID` 作为 key：
 
 ```json
 {
+  "schema_version": "2.0",
   "run": {
     "id": "run-20260625093000-login-smoke",
     "name": "Login smoke test",
@@ -270,16 +275,38 @@ casebook serve releases/v1-auth
     "started_at": "2026-06-25T01:30:00+00:00",
     "completed_at": "2026-06-25T02:30:00+00:00"
   },
+  "cases": {
+    "releases/v1-auth/login.yaml#TC_LOGIN_001": {
+      "file_path": "releases/v1-auth/login.yaml",
+      "id": "TC_LOGIN_001",
+      "title": "有效用户名和密码登录成功",
+      "priority": "P0",
+      "type": "functional",
+      "tags": ["login", "smoke"]
+    }
+  },
   "results": {
     "releases/v1-auth/login.yaml#TC_LOGIN_001": {
       "status": "passed",
       "notes": "Passed",
+      "actual_result": "成功进入系统首页",
       "defects": [],
       "executed_at": "2026-06-25T01:35:00+00:00"
     }
   }
 }
 ```
+
+`schema_version: "2.0"` 将用例定义与执行证据分开保存：
+
+- `run.case_scope` 固定本轮需要执行的用例及顺序。
+- `cases` 保存创建计划或加入计划时的轻量用例快照，包含路径、ID、标题、优先级、类型和标签。
+- `results` 只保存状态、备注、实际结果、缺陷、截图和执行时间等执行证据。
+- HTML 测试报告优先读取 `cases` 快照，因此执行结束后即使 YAML 用例被修改、重排或删除，历史报告仍能还原执行当时的信息。
+
+示例展示的是核心字段。启用截图、单用例测试人员或内部更新时间时，`results` 中仍可能包含 `screenshots`、`tester`、`updated_at` 等兼容字段，现有工作台和报告会继续识别。
+
+旧版计划文件不需要手工迁移。缺少 `schema_version` 或 `cases` 的文件仍可读取和生成报告，Casebook 会继续从当前 YAML 中补充用例信息。
 
 支持的执行状态：
 
@@ -318,7 +345,7 @@ Casebook 的标记数据保存在项目根目录：
 test-runs/*.json
 ```
 
-这些文件是后续生成 HTML 测试报告、测试过程记录和上线评审材料的重要数据来源。测试计划按启动目录隔离，适合围绕单个需求、版本或模块做执行统计。
+这些文件是后续生成 HTML 测试报告、测试过程记录和上线评审材料的重要数据来源。新建计划使用 `2.0` 数据结构，将稳定的用例快照与执行结果分开保存；旧版计划文件仍保持兼容。测试计划按启动目录隔离，适合围绕单个需求、版本或模块做执行统计。
 
 从工作台生成的报告保存在：
 

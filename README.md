@@ -191,7 +191,7 @@ casebook export releases/example/login.yaml
 casebook export releases/example --output login-review.html
 ```
 
-导出的 HTML 是评审视图，支持搜索、筛选、展开/收起，并内置 `Needs update` 标记和备注。标记和备注保存在浏览器本地，也可以通过 `Export review notes` 下载为 JSON。
+导出的 HTML 是评审视图，支持搜索、筛选、展开/收起，并内置 `Mark` 标记和备注。标记和备注保存在浏览器本地，也可以通过 `Export review notes` 下载为 JSON。
 
 可以按标签或优先级导出部分用例：
 
@@ -211,6 +211,7 @@ casebook export releases/example --priority P0
 - 为每条用例选择 `Passed`、`Failed`、`Blocked` 或 `Deferred`。
 - 展开用例记录执行备注、实际结果、JIRA 缺陷链接和截图证据。
 - 在主页面查看执行进度条和统计数据；未选择计划时，进度区域自动隐藏。
+- 当前选择的测试计划按启动范围保存在浏览器中，刷新页面后会自动恢复；计划不存在或不属于当前范围时自动取消选择。
 - 计划模式隐藏 Edit，只保留执行结果操作，避免执行过程中误改用例定义。
 - 未选择计划时，可从用例 Edit 抽屉选择一个进行中的计划并点击 `Add to plan`；新加入的用例从 `Untested` 开始。
 - 计划模式允许使用 `ID sorting` 整理当前文件的 ID，并保留当前计划中已执行用例的状态、备注、实际结果、缺陷和截图。
@@ -223,7 +224,7 @@ casebook export releases/example --priority P0
 test-runs/<run-id>.json
 ```
 
-这些数据不会写入 YAML 用例文件，而是作为后续生成测试报告的依据。
+这些数据不会写入 YAML 用例文件，而是作为后续生成测试报告的依据。新建计划使用 `schema_version: "2.0"`：`cases` 保存计划创建或用例加入计划时的轻量快照，`results` 独立保存执行状态和证据。这样后续调整、重排或删除 YAML 用例时，已执行计划的历史报告仍能保持原始用例信息；旧版计划 JSON 仍可继续读取和生成报告。
 
 ### 6. 生成 HTML 测试报告
 
@@ -241,6 +242,8 @@ reports/<报告名称>.html
 ```
 
 已经完成的计划可以重新填写报告名称并点击 `Generate report` 再次生成。
+
+计划抽屉会按名称列出该计划已经生成的报告。再次使用同名报告时会覆盖原 HTML 文件并更新原记录，不会产生重复条目。
 
 仍然可以通过命令行从测试计划 JSON 单独生成报告：
 
