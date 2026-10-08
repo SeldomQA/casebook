@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter, OrderedDict
 from pathlib import Path
-from threading import RLock
+from threading import Lock, RLock
 from typing import Any
 
 from ruamel.yaml import YAML
@@ -103,29 +103,34 @@ class CasebookStore:
         self.scan_dirs = normalize_scan_dirs(self.project_root, scan_dirs)
         self._yaml = YAML(typ="rt")
         self._lock = RLock()
+        self._refresh_lock = Lock()
         self._entries: list[dict[str, Any]] = []
         self._entries_by_path: dict[str, dict[str, Any]] = {}
         self.version = 0
 
     def refresh(self) -> dict[str, Any]:
         """Re-scan YAML files and return the updated project summary."""
-        entries: list[dict[str, Any]] = []
-        for scan_dir in self.scan_dirs:
-            root_path = resolve_project_path(self.project_root, scan_dir)
-            if not root_path.exists():
-                continue
-            for yaml_file in sorted(root_path.rglob("*")):
-                if yaml_file.suffix.lower() not in {".yaml", ".yml"}:
+        # ruamel's YAML instance keeps mutable parser state, so overlapping
+        # refreshes (e.g. the save handler and the file watcher) must be
+        # serialized or they corrupt each other and silently drop files.
+        with self._refresh_lock:
+            entries: list[dict[str, Any]] = []
+            for scan_dir in self.scan_dirs:
+                root_path = resolve_project_path(self.project_root, scan_dir)
+                if not root_path.exists():
                     continue
-                entry = self._parse_file(yaml_file)
-                if entry:
-                    entries.append(entry)
+                for yaml_file in sorted(root_path.rglob("*")):
+                    if yaml_file.suffix.lower() not in {".yaml", ".yml"}:
+                        continue
+                    entry = self._parse_file(yaml_file)
+                    if entry:
+                        entries.append(entry)
 
-        with self._lock:
-            self._entries = entries
-            self._entries_by_path = {entry["path"]: entry for entry in entries}
-            self.version += 1
-            return self.summary()
+            with self._lock:
+                self._entries = entries
+                self._entries_by_path = {entry["path"]: entry for entry in entries}
+                self.version += 1
+                return self.summary()
 
     def _parse_file(self, yaml_file: Path) -> dict[str, Any] | None:
         """Parse one YAML file, ignoring files outside the Casebook schema shape."""
