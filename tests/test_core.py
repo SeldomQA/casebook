@@ -4,6 +4,7 @@ import io
 import json
 import tempfile
 import textwrap
+import threading
 import unittest
 from pathlib import Path
 
@@ -78,6 +79,35 @@ def write_cases(project_root: Path, relative_path: str = "releases/login.yaml") 
     return target
 
 
+def write_case_file(project_root: Path, relative_path: str, case_count: int) -> Path:
+    """Write a Casebook YAML file containing the given number of cases."""
+    target = project_root / relative_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    blocks = "".join(
+        textwrap.dedent(
+            f"""
+            - id: "TC_GEN_{index:04d}"
+              title: "Generated case {index}"
+              priority: "P1"
+              type: "functional"
+              steps:
+                - Step one
+                - Step two
+              expected_results:
+                - Expected result
+              tags: [generated]
+            """
+        )
+        for index in range(case_count)
+    )
+    target.write_text(
+        'metadata:\n  module: "Generated"\n  feature: "Bulk"\n\ntest_cases:\n'
+        + blocks,
+        encoding="utf-8",
+    )
+    return target
+
+
 class CasebookCoreTests(unittest.TestCase):
 
     def test_init_project_creates_scaffold_files(self) -> None:
@@ -124,6 +154,64 @@ class CasebookCoreTests(unittest.TestCase):
             self.assertEqual(tree[0]["name"], "releases")
             self.assertEqual(tree[0]["count"], 3)
             self.assertEqual(tree[0]["children"][0]["name"], "login.yaml")
+
+    def test_concurrent_refresh_keeps_the_file_list_intact(self) -> None:
+        """A save handler refresh and a watcher refresh must not drop files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            expected_files = 4
+            expected_cases = 100
+            for index in range(expected_files):
+                write_case_file(
+                    project_root,
+                    f"releases/bulk_{index}.yaml",
+                    expected_cases // expected_files,
+                )
+
+            store = CasebookStore(project_root, scan_dirs=["releases"])
+            store.refresh()
+
+            # Track how many threads parse YAML at the same time; a shared
+            # ruamel parser corrupts itself when refreshed concurrently.
+            counter_lock = threading.Lock()
+            active = 0
+            max_active = 0
+            original_parse = store._parse_file
+
+            def tracked_parse(file_path):
+                nonlocal active, max_active
+                with counter_lock:
+                    active += 1
+                    max_active = max(max_active, active)
+                try:
+                    return original_parse(file_path)
+                finally:
+                    with counter_lock:
+                        active -= 1
+
+            store._parse_file = tracked_parse
+
+            barrier = threading.Barrier(2)
+            results: list[tuple[int, int]] = []
+
+            def worker() -> None:
+                barrier.wait()
+                for _ in range(4):
+                    summary = store.refresh()
+                    results.append(
+                        (summary["files"], summary["cases"]))
+
+            threads = [threading.Thread(target=worker) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            self.assertEqual(max_active, 1)
+            self.assertTrue(results)
+            for files, cases in results:
+                self.assertEqual((files, cases),
+                                 (expected_files, expected_cases))
 
     def test_editor_updates_case_and_detects_conflicts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
