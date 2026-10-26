@@ -49,6 +49,7 @@ const ZH_TRANSLATIONS = {
   "{executed} / {total} executed - {percent}%": "已执行 {executed} / {total} - {percent}%",
   "{count} cases": "{count} 条用例", "No records": "暂无记录", "Open {name}": "打开 {name}",
   "Full": "全量", "Retest": "重测", "Collapse case details": "收起用例详情", "Expand case details": "展开用例详情",
+  "Expand all cases": "全部展开", "Collapse all cases": "全部收起",
   "Copy case ID": "复制用例 ID", "Copy case ID {id}": "复制用例 ID {id}",
   "Completed test plans cannot be updated": "已完成的测试计划不能修改",
   "Update IDs and preserve execution results in the current test plan": "更新 ID 并保留当前计划的执行结果",
@@ -164,6 +165,7 @@ function bindElements() {
     "priorityFilters",
     "executionFilter",
     "renumberIdsButton",
+    "toggleAllCasesButton",
     "caseRows",
     "noResults",
     "editorDrawer",
@@ -217,6 +219,7 @@ function bindEvents() {
   els.createRunButton.addEventListener("click", createRun);
   els.completeRunButton.addEventListener("click", completeRun);
   els.renumberIdsButton.addEventListener("click", renumberCurrentFile);
+  els.toggleAllCasesButton.addEventListener("click", toggleAllCaseDetails);
   els.caseSearch.addEventListener("input", () => {
     state.query = els.caseSearch.value.trim().toLowerCase();
     renderCaseRows();
@@ -1005,8 +1008,9 @@ function executionFilterCounts() {
 
 function renderCaseRows() {
   if (!state.currentData) return;
-  const rows = currentCasePool()
-    .filter(matchesCurrentFilter)
+  const visibleCases = currentCasePool().filter(matchesCurrentFilter);
+  renderCaseExpansionButton(visibleCases);
+  const rows = visibleCases
     .map((caseItem) => {
       const key = markKey(state.currentData.path, caseItem.id);
       const mark = reviewMark(caseItem.id);
@@ -1201,6 +1205,31 @@ function toggleCaseDetails(caseId) {
   } else {
     state.expandedCaseIds.add(caseId);
   }
+  renderCaseRows();
+}
+
+function renderCaseExpansionButton(visibleCases) {
+  const allExpanded = visibleCases.length > 0
+    && visibleCases.every((caseItem) => state.expandedCaseIds.has(caseItem.id));
+  const label = t(allExpanded ? "Collapse all cases" : "Expand all cases");
+  els.toggleAllCasesButton.disabled = visibleCases.length === 0;
+  els.toggleAllCasesButton.title = label;
+  els.toggleAllCasesButton.setAttribute("aria-label", label);
+  els.toggleAllCasesButton.setAttribute("aria-expanded", String(allExpanded));
+  els.toggleAllCasesButton.classList.toggle("all-expanded", allExpanded);
+}
+
+function toggleAllCaseDetails() {
+  const visibleCases = currentCasePool().filter(matchesCurrentFilter);
+  const allExpanded = visibleCases.length > 0
+    && visibleCases.every((caseItem) => state.expandedCaseIds.has(caseItem.id));
+  visibleCases.forEach((caseItem) => {
+    if (allExpanded) {
+      state.expandedCaseIds.delete(caseItem.id);
+    } else {
+      state.expandedCaseIds.add(caseItem.id);
+    }
+  });
   renderCaseRows();
 }
 

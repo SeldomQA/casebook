@@ -851,6 +851,62 @@ body.resizing-sidebar .app-shell {
   white-space: nowrap;
 }
 
+.case-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.case-expansion-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.case-expansion-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.case-expansion-icon {
+  position: relative;
+  width: 16px;
+  height: 20px;
+}
+
+.case-expansion-icon::before,
+.case-expansion-icon::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
+
+.case-expansion-icon::before {
+  top: 3px;
+  transform: rotate(225deg);
+}
+
+.case-expansion-icon::after {
+  bottom: 3px;
+  transform: rotate(45deg);
+}
+
+.case-expansion-button.all-expanded .case-expansion-icon::before {
+  transform: rotate(45deg);
+}
+
+.case-expansion-button.all-expanded .case-expansion-icon::after {
+  transform: rotate(225deg);
+}
+
 .case-list-controls .filter-button {
   min-height: 28px;
   padding: 4px 9px;

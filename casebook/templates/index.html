@@ -125,7 +125,15 @@
           <section class="content-card cases-card">
             <div class="case-list-controls">
               <div class="card-actions case-card-actions">
-                <button class="outline-button renumber-button" id="renumberIdsButton" type="button">ID sorting</button>
+                <div class="case-list-actions">
+                  <button class="outline-button case-expansion-button" id="toggleAllCasesButton" type="button"
+                    title="Expand all cases" aria-label="Expand all cases" aria-expanded="false"
+                    aria-controls="caseRows" disabled>
+                    <span class="case-expansion-icon" aria-hidden="true"></span>
+                  </button>
+                  <button class="outline-button renumber-button" id="renumberIdsButton" type="button">ID
+                    sorting</button>
+                </div>
                 <div class="case-list-tools">
                   <div class="filter-group" id="priorityFilters"></div>
                   <select id="executionFilter" class="execution-filter" aria-label="Execution result filter"
