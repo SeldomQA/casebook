@@ -140,6 +140,14 @@ casebook serve releases/example
 http://127.0.0.1:8089
 ```
 
+启动成功后，Casebook 会使用系统默认浏览器打开本地工作台。如果只需要启动服务而不打开浏览器，可使用：
+
+```bash
+casebook serve releases/example --no-open
+```
+
+工作台默认使用英文。右上角的语言下拉框显示当前语言，可在 `English` 和 `中文` 之间切换；语言选择保存在当前浏览器中。通过工作台生成测试报告时，报告会沿用当前语言。
+
 Casebook 会在启动前校验扫描目录。目录不存在、路径无效或目标不是目录时，会直接输出错误并退出，不再启动空工作区。例如：
 
 ```text
@@ -198,6 +206,7 @@ casebook export releases/example --output login-review.html
 ```bash
 casebook export releases/example --tag smoke
 casebook export releases/example --priority P0
+casebook export releases/example --language zh-CN
 ```
 
 ### 5. 创建测试计划并执行用例
@@ -249,6 +258,7 @@ reports/<报告名称>.html
 
 ```bash
 casebook report test-runs/run-20260625093000-login-smoke.json --output reports/login-smoke.html
+casebook report test-runs/run-20260625093000-login-smoke.json --output reports/login-smoke-zh.html --language zh-CN
 ```
 
 将命令中的 run 文件名替换成你本地 `test-runs/` 目录下实际生成的文件。

@@ -56,6 +56,12 @@ releases/v1-auth/login.yaml
 casebook serve releases/v1-auth
 ```
 
+启动成功后，Casebook 默认使用系统默认浏览器打开本地工作台。服务器环境、自动化任务或不希望自动打开浏览器时，可使用：
+
+```bash
+casebook serve releases/v1-auth --no-open
+```
+
 `casebook serve` 会在启动 Web 服务前校验每个扫描目录。目录不存在、路径无效或目标不是目录时会直接报错并退出。例如：
 
 ```text
@@ -63,6 +69,12 @@ casebook serve: directory not found: releases/v1-auth
 ```
 
 不传目录时使用默认的 `releases`，并执行相同校验。这样可以尽早发现目录拼写错误，避免误以为一个空工作区已经正常启动。
+
+### 切换工作台语言
+
+工作台默认使用英文。启动 `casebook serve` 后，可通过页面右上角、GitHub 入口旁的语言下拉框在 `English` 和 `中文` 之间切换。下拉框始终显示当前语言；语言选择保存在浏览器 localStorage 中，刷新页面或重新启动 Casebook 后仍会保留。
+
+语言切换覆盖工作台导航、筛选、测试计划、用例评审、执行详情和操作提示，但不会翻译 YAML 中由用户编写的用例内容。通过工作台完成计划并生成报告时，当前语言会传给报告生成器。
 
 ### 生成后的检查清单
 
@@ -185,6 +197,7 @@ casebook export releases/v1-auth --output login-review.html
 casebook export releases/v1-auth --tag smoke
 casebook export releases/v1-auth --priority P0
 casebook export releases/v1-auth --tag smoke --priority P0
+casebook export releases/v1-auth --language zh-CN
 ```
 
 `--tag` 和 `--priority` 都可以重复传入，也支持逗号分隔：
@@ -389,6 +402,7 @@ test-runs/run-20260625093000-login-smoke.html
 
 ```bash
 casebook report test-runs/run-20260625093000-login-smoke.json --output reports/login-smoke.html
+casebook report test-runs/run-20260625093000-login-smoke.json --output reports/login-smoke-zh.html --language zh-CN
 ```
 
 报告内容包括：
