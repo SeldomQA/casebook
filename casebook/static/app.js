@@ -447,15 +447,25 @@ function setLanguage(language) {
   }
   applyStaticTranslations();
   if (state.summary) renderShell();
+  const environment = els.runEnvironmentInput.value;
+  const tester = els.runTesterInput.value;
+  const reportName = els.reportNameInput.value;
   renderExecutionPanel();
+  els.runEnvironmentInput.value = environment;
+  els.runTesterInput.value = tester;
+  els.reportNameInput.value = reportName;
   if (state.currentData) {
     renderFileMeta();
     renderFilters();
-    renderCaseRows();
+    renderCaseRows({ preserveInputs: true });
   }
   if (state.selectedCaseId) {
     const selected = findCase(state.selectedCaseId);
-    if (selected) fillDrawer(selected);
+    if (selected) {
+      const selectedPlan = els.casePlanSelect?.value;
+      renderCasePlanAssignment(selected);
+      if (els.casePlanSelect) els.casePlanSelect.value = selectedPlan || "";
+    }
   }
 }
 
@@ -1006,8 +1016,11 @@ function executionFilterCounts() {
   return counts;
 }
 
-function renderCaseRows() {
+function renderCaseRows({ preserveInputs = false } = {}) {
   if (!state.currentData) return;
+  const previousRows = preserveInputs
+    ? new Map(Array.from(els.caseRows.children, (row) => [row.dataset.caseId, row]))
+    : null;
   const visibleCases = currentCasePool().filter(matchesCurrentFilter);
   renderCaseExpansionButton(visibleCases);
   const rows = visibleCases
@@ -1059,6 +1072,18 @@ function renderCaseRows() {
         </article>`;
     });
   els.caseRows.innerHTML = rows.join("");
+  if (previousRows) {
+    // Reuse draft inputs, including file selections, while rebuilding translated labels.
+    Array.from(els.caseRows.children).forEach((row) => {
+      const inputs = previousRows.get(row.dataset.caseId)?.querySelectorAll("input, textarea") || [];
+      row.querySelectorAll("input, textarea").forEach((replacement, index) => {
+        const input = inputs[index];
+        if (!input) return;
+        input.placeholder = replacement.placeholder;
+        replacement.replaceWith(input);
+      });
+    });
+  }
   els.noResults.hidden = rows.length > 0;
 }
 

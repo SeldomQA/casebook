@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from html import escape
 from pathlib import Path
 from typing import Any
 
-from .i18n import localize_report_html, normalize_language
+from .i18n import normalize_language, translate
 from .scanner import CasebookStore
 
 
@@ -67,10 +68,7 @@ def generate_report(
             if project_root else _infer_project_root(run_path))
     run_data = _load_run_data(run_path)
     report_data = build_report_data(run_data, root)
-    html = localize_report_html(
-        render_report_html(report_data),
-        normalize_language(language),
-    )
+    html = render_report_html(report_data, language=language)
 
     target = output_file.expanduser().resolve(
     ) if output_file else run_path.with_suffix(".html")
@@ -133,15 +131,24 @@ def build_report_data(run_data: dict[str, Any], project_root: Path) -> dict[str,
     }
 
 
-def render_report_html(data: dict[str, Any]) -> str:
+def render_report_html(data: dict[str, Any], language: str = "en") -> str:
     """Render a standalone HTML report string."""
+    language = normalize_language(language)
+    t = partial(translate, language=language)
     run = data["run"]
     stats = data["stats"]
     failed_cases = data["failed_cases"]
     blocked_cases = data["blocked_cases"]
+    localized_chart_data = {
+        **data["chart_data"],
+        **{
+            group: [{**row, "label": t(row["label"])} for row in data["chart_data"][group]]
+            for group in ("execution", "priority")
+        },
+    }
     chart_data = json.dumps(
-        data["chart_data"], ensure_ascii=False).replace("</", "<\\/")
-    title = f"Casebook Test Report - {run['name']}"
+        localized_chart_data, ensure_ascii=False).replace("</", "<\\/")
+    title = t("Casebook Test Report - ") + run["name"]
     total = stats["total"] or 0
     completion_rate = (stats["executed"] / total * 100) if total else 0
     pass_rate = (stats["passed"] / total * 100) if total else 0
@@ -149,16 +156,16 @@ def render_report_html(data: dict[str, Any]) -> str:
     priority_rows = data["chart_data"]["priority"]
     p0_issues = next((row["value"] for row in priority_rows if row["label"] == "P0"), 0)
     scope_text = ", ".join(run["scope"]) or "N/A"
-    status_label = _run_status_label(run.get("status")) or "In Progress"
+    status_label = t(_run_status_label(run.get("status")) or "In Progress")
     attention_class = " clear" if issue_total == 0 else ""
     attention_text = (
-        f"No failed or blocked cases are currently open. Current pass rate is {pass_rate:.0f}%."
+        t("No failed or blocked cases are currently open. Current pass rate is {rate}%.").format(rate=f"{pass_rate:.0f}")
         if issue_total == 0
-        else f"{issue_total} failed or blocked cases require attention; {p0_issues} are P0 priority. Current pass rate is {pass_rate:.0f}%."
+        else t("{count} failed or blocked cases require attention; {p0} are P0 priority. Current pass rate is {rate}%.").format(count=issue_total, p0=p0_issues, rate=f"{pass_rate:.0f}")
     )
 
     return f"""<!doctype html>
-<html lang="en">
+<html lang="{language}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -472,17 +479,17 @@ def render_report_html(data: dict[str, Any]) -> str:
   <main class="page">
     <header class="hero">
       <div class="hero-copy">
-        <p class="brand">Casebook · Test Quality Brief</p>
-        <h1 class="title">Test Execution Brief</h1>
-        <p class="subtitle">A concise view of execution health, delivery risk, unresolved cases, and detailed evidence for <strong>{_html(run["name"])}</strong>.</p>
+        <p class="brand">{t("Casebook · Test Quality Brief")}</p>
+        <h1 class="title">{t("Test Execution Brief")}</h1>
+        <p class="subtitle">{t("A concise view of execution health, delivery risk, unresolved cases, and detailed evidence for ")}<strong>{_html(run["name"])}</strong>.</p>
         <div class="hero-meta">
           <span class="meta-pill">{_html(status_label)}</span>
-          <span class="meta-pill">{_html(_run_mode_label(run["mode"]))}</span>
-          <span class="meta-pill">Scope: {_html(scope_text)}</span>
-          <span class="meta-pill">Generated: {_html(data["generated_at"])}</span>
+          <span class="meta-pill">{_html(t(_run_mode_label(run["mode"])))}</span>
+          <span class="meta-pill">{t("Scope")}: {_html(scope_text)}</span>
+          <span class="meta-pill">{t("Generated: ")}{_html(data["generated_at"])}</span>
         </div>
       </div>
-      <div class="health-ring"><div><strong>{completion_rate:.0f}%</strong><span>Executed</span></div></div>
+      <div class="health-ring"><div><strong>{completion_rate:.0f}%</strong><span>{t("Executed")}</span></div></div>
     </header>
 
     <div class="attention{attention_class}">
@@ -492,44 +499,44 @@ def render_report_html(data: dict[str, Any]) -> str:
 
     <section class="section">
       <div class="section-heading">
-        <div><h2>Plan Overview</h2><p>Execution identity, ownership, scope, and timing.</p></div>
+        <div><h2>{t("Plan Overview")}</h2><p>{t("Execution identity, ownership, scope, and timing.")}</p></div>
       </div>
-      <div class="card plan-card">{_plan_info(run)}</div>
+      <div class="card plan-card">{_plan_info(run, language)}</div>
     </section>
 
     <section class="section">
       <div class="section-heading">
-        <div><h2>Execution Summary</h2><p>Current result totals across the selected plan scope.</p></div>
-        <span>{stats["executed"]} of {stats["total"]} executed</span>
+        <div><h2>{t("Execution Summary")}</h2><p>{t("Current result totals across the selected plan scope.")}</p></div>
+        <span>{t("{executed} of {total} executed").format(executed=stats["executed"], total=stats["total"])}</span>
       </div>
       <div class="card stats-grid">
-        {_stat("Total Cases", stats["total"], "total")}
-        {_stat("Executed", stats["executed"], "executed")}
-        {_stat("Passed", stats["passed"], "passed")}
-        {_stat("Failed", stats["failed"], "failed")}
-        {_stat("Blocked", stats["blocked"], "blocked")}
-        {_stat("Deferred", stats["deferred"], "deferred")}
-        {_stat("Untested", stats["untested"], "untested")}
+        {_stat(t("Total Cases"), stats["total"], "total")}
+        {_stat(t("Executed"), stats["executed"], "executed")}
+        {_stat(t("Passed"), stats["passed"], "passed")}
+        {_stat(t("Failed"), stats["failed"], "failed")}
+        {_stat(t("Blocked"), stats["blocked"], "blocked")}
+        {_stat(t("Deferred"), stats["deferred"], "deferred")}
+        {_stat(t("Untested"), stats["untested"], "untested")}
       </div>
     </section>
 
     <section class="section">
       <div class="section-heading">
-        <div><h2>Quality Signals</h2><p>Result distribution and priority concentration for unresolved risk.</p></div>
+        <div><h2>{t("Quality Signals")}</h2><p>{t("Result distribution and priority concentration for unresolved risk.")}</p></div>
       </div>
       <div class="insight-grid">
         <div class="card chart-card">
-          <h3 class="section-title">Execution Distribution</h3>
+          <h3 class="section-title">{t("Execution Distribution")}</h3>
           <div class="chart-body">
             <div class="chart" id="executionChart"></div>
-            {_legend(data["chart_data"]["execution"])}
+            {_legend(localized_chart_data["execution"])}
           </div>
         </div>
         <div class="card chart-card">
-          <h3 class="section-title">Failed / Blocked Priority</h3>
+          <h3 class="section-title">{t("Failed / Blocked Priority")}</h3>
           <div class="chart-body">
             <div class="chart" id="priorityChart"></div>
-            {_legend(data["chart_data"]["priority"])}
+            {_legend(localized_chart_data["priority"])}
           </div>
         </div>
       </div>
@@ -537,24 +544,24 @@ def render_report_html(data: dict[str, Any]) -> str:
 
     <section class="section">
       <div class="section-heading">
-        <div><h2>Attention Required</h2><p>Cases most likely to affect release confidence.</p></div>
-        <span>{issue_total} cases</span>
+        <div><h2>{t("Attention Required")}</h2><p>{t("Cases most likely to affect release confidence.")}</p></div>
+        <span>{t("{count} cases").format(count=issue_total)}</span>
       </div>
       <div class="focus-grid">
-        {_focus_list("Failed Cases", failed_cases, "failed")}
-        {_focus_list("Blocked Cases", blocked_cases, "blocked")}
+        {_focus_list(t("Failed Cases"), failed_cases, "failed", language)}
+        {_focus_list(t("Blocked Cases"), blocked_cases, "blocked", language)}
       </div>
     </section>
 
     <section class="section">
       <div class="section-heading">
-        <div><h2>Execution Details</h2><p>Expand a case to review its execution evidence.</p></div>
-        <span>{len(data["cases"])} cases</span>
+        <div><h2>{t("Execution Details")}</h2><p>{t("Expand a case to review its execution evidence.")}</p></div>
+        <span>{t("{count} cases").format(count=len(data["cases"]))}</span>
       </div>
-      <div class="tables">{_execution_details(data["cases"])}</div>
+      <div class="tables">{_execution_details(data["cases"], language)}</div>
     </section>
 
-    <footer class="footer"><strong>Casebook</strong><span>{_html(run["name"])} · {_html(scope_text)}</span><span>Generated {_html(data["generated_at"])}</span></footer>
+    <footer class="footer"><strong>Casebook</strong><span>{_html(run["name"])} · {_html(scope_text)}</span><span>{t("Generated ")}{_html(data["generated_at"])}</span></footer>
   </main>
   <script>
     const reportData = {chart_data};
@@ -587,11 +594,11 @@ def render_report_html(data: dict[str, Any]) -> str:
     }}
     renderDonut("executionChart", reportData.execution, {{
       value: reportData.passRateText,
-      label: "Pass Rate"
+      label: {json.dumps(t("Pass Rate"), ensure_ascii=False)}
     }});
     renderDonut("priorityChart", reportData.priority, {{
       value: String(reportData.issueTotal),
-      label: "Issues"
+      label: {json.dumps(t("Issues"), ensure_ascii=False)}
     }});
     document.addEventListener("click", (event) => {{
       const button = event.target.closest("[data-detail-toggle]");
@@ -788,7 +795,7 @@ def _case_table(title: str, records: list[CaseRecord]) -> str:
     """
 
 
-def _focus_list(title: str, records: list[CaseRecord], status: str) -> str:
+def _focus_list(title: str, records: list[CaseRecord], status: str, language: str = "en") -> str:
     """Render a compact brief-style list for failed or blocked cases."""
     if records:
         items = "\n".join(
@@ -799,71 +806,73 @@ def _focus_list(title: str, records: list[CaseRecord], status: str) -> str:
                 <strong>{_html(record.title)}</strong>
                 <p>{_html(record.notes or record.actual_result or record.file_path)}</p>
               </div>
-              <span class="status-pill {_html(status)}">{_html(status)}</span>
+              <span class="status-pill {_html(status)}">{_html(translate(status, language))}</span>
             </div>
             """
             for record in records
         )
     else:
-        items = '<div class="empty">No records</div>'
+        items = f'<div class="empty">{translate("No records", language)}</div>'
     return f"""
       <div class="card focus-card">
         <div class="table-header">
           <h2>{_html(title)}</h2>
-          <span>{len(records)} cases</span>
+          <span>{translate("{count} cases", language).format(count=len(records))}</span>
         </div>
         <div class="focus-list">{items}</div>
       </div>
     """
 
 
-def _execution_details(records: list[CaseRecord]) -> str:
+def _execution_details(records: list[CaseRecord], language: str = "en") -> str:
     """Render collapsible execution rows matching the interactive case list."""
+    t = partial(translate, language=language)
     rows = "\n".join(
-        _execution_detail_row(record, index)
+        _execution_detail_row(record, index, language)
         for index, record in enumerate(records)
     )
-    body = rows if rows else '<div class="empty">No records</div>'
+    body = rows if rows else f'<div class="empty">{t("No records")}</div>'
     return f"""
       <div class="card execution-list-card">
         <div class="table-header">
-          <h2>All Test Cases</h2>
-          <span>{len(records)} cases</span>
+          <h2>{t("All Test Cases")}</h2>
+          <span>{t("{count} cases").format(count=len(records))}</span>
         </div>
         <div class="execution-list-head" aria-hidden="true">
-          <span></span><span>Case</span><span>Title</span><span>Priority</span><span>Result</span>
+          <span></span><span>{t("Case")}</span><span>{t("Title")}</span><span>{t("Priority")}</span><span>{t("Result")}</span>
         </div>
         <div class="execution-list">{body}</div>
       </div>
     """
 
 
-def _execution_detail_row(record: CaseRecord, index: int) -> str:
+def _execution_detail_row(record: CaseRecord, index: int, language: str = "en") -> str:
     """Render one collapsed execution summary plus its hidden evidence panel."""
+    t = partial(translate, language=language)
     detail_id = f"execution-detail-{index}"
     priority_class = f"priority-{_html(record.priority.lower())}"
     status = record.status if record.status in EXECUTION_STATUS_LABELS else "untested"
-    status_label = EXECUTION_STATUS_LABELS.get(status, status.title())
+    status_label = t(EXECUTION_STATUS_LABELS.get(status, status.title()))
     return f"""
       <article class="execution-case">
         <div class="execution-summary">
           <button class="execution-toggle" type="button" data-detail-toggle="{detail_id}"
-            aria-expanded="false" aria-controls="{detail_id}" aria-label="Expand execution details"></button>
+            aria-expanded="false" aria-controls="{detail_id}" aria-label="{t("Expand execution details")}"></button>
           <span class="case-id">{_html(record.case_id)}</span>
           <div class="execution-title">
             <strong>{_html(record.title)}</strong>
-            <small>{_html(record.case_type or "Test case")}</small>
+            <small>{_html(record.case_type or t("Test case"))}</small>
           </div>
           <span><span class="priority {priority_class}">{_html(record.priority)}</span></span>
           <span><span class="result-pill result-{_html(status)}">{_html(status_label)}</span></span>
         </div>
         <div class="execution-detail" id="{detail_id}" hidden>
-          {_detail_item("File", _html(record.file_path), True)}
-          {_detail_item("Notes", _html(record.notes or "--"))}
-          {_detail_item("Actual Result", _html(record.actual_result or "--"))}
-          {_detail_item("Defects", _defects_html(record.defects))}
-          {_detail_item("Screenshots", _screenshots_text(record.screenshots))}
-          {_detail_item("Executed At", _html(record.executed_at or "--"))}
+          {_detail_item(t("File"), _html(record.file_path), True)}
+          {_detail_item(t("Notes"), _html(record.notes or "--"))}
+          {_detail_item(t("Actual Result"), _html(record.actual_result or "--"))}
+          {_detail_item(t("Defects"), _defects_html(record.defects))}
+          {_detail_item(t("Screenshots"), _screenshots_text(record.screenshots))}
+          {_detail_item(t("Executed At"), _html(record.executed_at or "--"))}
         </div>
       </article>
     """
@@ -974,13 +983,14 @@ def _stat(label: str, value: int, class_name: str) -> str:
     """
 
 
-def _plan_info(run: dict[str, Any]) -> str:
+def _plan_info(run: dict[str, Any], language: str = "en") -> str:
     """Render the test plan metadata block above the statistics."""
+    t = partial(translate, language=language)
     fields = [
         ("Plan ID", run.get("id")),
         ("Plan Name", run.get("name")),
-        ("Status", _run_status_label(run.get("status"))),
-        ("Mode", _run_mode_label(run.get("mode"))),
+        ("Status", t(_run_status_label(run.get("status")))),
+        ("Mode", t(_run_mode_label(run.get("mode")))),
         ("Source Plan", run.get("source_run_id")),
         ("Case Scope", run.get("case_total")),
         ("Scope", ", ".join(run.get("scope") or [])),
@@ -992,7 +1002,7 @@ def _plan_info(run: dict[str, Any]) -> str:
     items = "\n".join(
         f"""
         <div class="plan-info-item">
-          <span>{_html(label)}</span>
+          <span>{_html(t(label))}</span>
           <strong>{_html(_display_value(value))}</strong>
         </div>
         """

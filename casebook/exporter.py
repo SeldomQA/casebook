@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from functools import partial
 from html import escape
 from pathlib import Path
 from typing import Any
 
-from .i18n import localize_export_html, normalize_language
+from .i18n import normalize_language, translate, translations
 from .scanner import CasebookStore, compute_stats, relative_path
 
 
@@ -38,18 +39,21 @@ def generate_export(
     target = _default_output(source_path, output_file)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        localize_export_html(render_export_html(data), normalize_language(language)),
+        render_export_html(data, language=language),
         encoding="utf-8",
     )
     return target
 
 
-def render_export_html(data: dict[str, Any]) -> str:
+def render_export_html(data: dict[str, Any], language: str = "en") -> str:
     """Render the standalone review HTML with embedded case data."""
+    language = normalize_language(language)
+    t = partial(translate, language=language)
+    ui_json = json.dumps(translations(language), ensure_ascii=False).replace("</", "<\\/")
     export_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
-    title = f"Casebook Export - {data['title']}"
+    title = t("Casebook Export - ") + data["title"]
     return f"""<!doctype html>
-<html lang="en">
+<html lang="{language}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -649,7 +653,7 @@ def render_export_html(data: dict[str, Any]) -> str:
       <span class="brand-mark">C</span>
       <span class="brand-copy">
         <strong>Casebook</strong>
-        <small>Portable review workspace</small>
+        <small>{t("Portable review workspace")}</small>
       </span>
     </div>
     <div class="app-meta" id="generatedAt"></div>
@@ -657,29 +661,30 @@ def render_export_html(data: dict[str, Any]) -> str:
   <main class="page">
     <section class="hero">
       <div class="hero-copy">
-        <p class="hero-kicker">TEST CASE REVIEW</p>
+        <p class="hero-kicker">{t("TEST CASE REVIEW")}</p>
         <h1 id="pageTitle"></h1>
         <p class="subtitle" id="subtitle"></p>
       </div>
       <div class="stats" id="stats"></div>
     </section>
-    <section class="toolbar" aria-label="Review controls">
-      <input class="search" id="searchInput" type="search" placeholder="Search cases">
-      <select id="priorityFilter" aria-label="Priority filter"></select>
-      <select id="tagFilter" aria-label="Tag filter"></select>
-      <select id="markFilter" aria-label="Review mark filter">
-        <option value="all">All review states</option>
-        <option value="marked">Marked only</option>
-        <option value="unmarked">Unmarked only</option>
+    <section class="toolbar" aria-label="{t("Review controls")}">
+      <input class="search" id="searchInput" type="search" placeholder="{t("Search cases")}">
+      <select id="priorityFilter" aria-label="{t("Priority filter")}"></select>
+      <select id="tagFilter" aria-label="{t("Tag filter")}"></select>
+      <select id="markFilter" aria-label="{t("Review mark filter")}">
+        <option value="all">{t("All review states")}</option>
+        <option value="marked">{t("Marked only")}</option>
+        <option value="unmarked">{t("Unmarked only")}</option>
       </select>
-      <button class="button" id="expandAllButton" type="button">Expand all</button>
-      <button class="button" id="collapseAllButton" type="button">Collapse all</button>
-      <button class="button primary" id="downloadReviewButton" type="button">Export review notes</button>
+      <button class="button" id="expandAllButton" type="button">{t("Expand all")}</button>
+      <button class="button" id="collapseAllButton" type="button">{t("Collapse all")}</button>
+      <button class="button primary" id="downloadReviewButton" type="button">{t("Export review notes")}</button>
     </section>
     <section id="content"></section>
-    <div class="empty" id="emptyState" hidden>No cases match the current filters.</div>
+    <div class="empty" id="emptyState" hidden>{t("No cases match the current filters.")}</div>
   </main>
   <script>
+    const uiTranslations = {ui_json};
     const exportData = {export_json};
     const storageKey = "casebook-export-review:" + exportData.export_id;
     const state = {{
@@ -707,10 +712,18 @@ def render_export_html(data: dict[str, Any]) -> str:
       downloadReview: document.getElementById("downloadReviewButton"),
     }};
 
+    function t(key, values = {{}}) {{
+      const template = uiTranslations[key] || key;
+      return Object.entries(values).reduce(
+        (text, [name, value]) => text.replaceAll(`{{${{name}}}}`, String(value)),
+        template,
+      );
+    }}
+
     boot();
 
     function boot() {{
-      els.generatedAt.textContent = "Generated: " + exportData.generated_at;
+      els.generatedAt.textContent = t("Generated: ") + exportData.generated_at;
       els.pageTitle.textContent = exportData.title;
       els.subtitle.textContent = exportData.source_label + filterLabel();
       renderFilterOptions();
@@ -760,13 +773,13 @@ def render_export_html(data: dict[str, Any]) -> str:
     function renderFilterOptions() {{
       const stats = exportData.stats;
       els.priority.innerHTML = [
-        option("all", "All priorities (" + stats.total + ")"),
+        option("all", t("All priorities ({{count}})", {{ count: stats.total }})),
         option("P0", "P0 (" + (stats.priorities.P0 || 0) + ")"),
         option("P1", "P1 (" + (stats.priorities.P1 || 0) + ")"),
         option("P2", "P2 (" + (stats.priorities.P2 || 0) + ")"),
       ].join("");
       const tags = Object.keys(stats.tags).sort();
-      els.tag.innerHTML = [option("all", "All tags"), ...tags.map((tag) => option(tag, tag + " (" + stats.tags[tag] + ")"))].join("");
+      els.tag.innerHTML = [option("all", t("All tags")), ...tags.map((tag) => option(tag, tag + " (" + stats.tags[tag] + ")"))].join("");
     }}
 
     function render() {{
@@ -783,11 +796,11 @@ def render_export_html(data: dict[str, Any]) -> str:
       const marked = cases.filter((item) => reviewItem(item.key).marked).length;
       const withNotes = cases.filter((item) => reviewItem(item.key).notes.trim()).length;
       els.stats.innerHTML = [
-        stat(exportData.stats.files, "Files", "files"),
-        stat(exportData.stats.total, "Cases", "cases"),
+        stat(exportData.stats.files, t("Files"), "files"),
+        stat(exportData.stats.total, t("Cases"), "cases"),
         stat(exportData.stats.priorities.P0 || 0, "P0", "p0"),
-        stat(marked, "Marked", "marked"),
-        stat(withNotes, "Notes", "notes"),
+        stat(marked, t("Marked"), "marked"),
+        stat(withNotes, t("Notes"), "notes"),
       ].join("");
     }}
 
@@ -799,21 +812,21 @@ def render_export_html(data: dict[str, Any]) -> str:
               <h2>${{escapeHtml(file.module)}} / ${{escapeHtml(file.feature || "Untitled")}}</h2>
               <div class="file-path">${{escapeHtml(file.path)}}</div>
               <div class="file-meta">
-                ${{pill("Owner: " + (file.owner || "N/A"))}}
-                ${{pill("Reviewed: " + (file.last_reviewed || "N/A"))}}
+                ${{pill(t("Owner: ") + (file.owner || "N/A"))}}
+                ${{pill(t("Reviewed: ") + (file.last_reviewed || "N/A"))}}
                 ${{file.file_tags.map((tag) => pill(tag)).join("")}}
               </div>
             </div>
-            <div class="file-count">${{file.cases.length}} cases</div>
+            <div class="file-count">${{t("{{count}} cases", {{ count: file.cases.length }})}}</div>
           </header>
           <div class="case-table-head" aria-hidden="true">
             <span></span>
             <span>ID</span>
-            <span>Title</span>
-            <span>Priority</span>
-            <span>Type</span>
-            <span>Tags</span>
-            <span>Actions</span>
+            <span>${{t("Title")}}</span>
+            <span>${{t("Priority")}}</span>
+            <span>${{t("Type")}}</span>
+            <span>${{t("Tags")}}</span>
+            <span>${{t("Actions")}}</span>
           </div>
           <div class="case-list">${{file.cases.map((caseItem) => renderCase(file, caseItem)).join("")}}</div>
         </article>`;
@@ -826,7 +839,7 @@ def render_export_html(data: dict[str, Any]) -> str:
       const marked = Boolean(review.marked);
       const tags = [
         ...caseItem.tags.map((tag) => `<span class="tag">${{escapeHtml(tag)}}</span>`),
-        marked ? '<span class="tag mark-tag">Mark</span>' : "",
+        marked ? `<span class="tag mark-tag">${{t("Mark")}}</span>` : "",
       ].join("");
       return `
         <article class="case-card ${{open ? "open" : ""}}" data-case-key="${{escapeAttr(key)}}">
@@ -836,7 +849,7 @@ def render_export_html(data: dict[str, Any]) -> str:
             <span class="case-main-cell">
               <span class="case-title-line">
                 <span class="case-title">${{escapeHtml(caseItem.title)}}</span>
-                ${{caseItem.auto ? '<span class="auto-pill">Auto</span>' : ""}}
+                ${{caseItem.auto ? `<span class="auto-pill">${{t("Auto")}}</span>` : ""}}
               </span>
               ${{caseItem.description ? `<span class="case-description">${{escapeHtml(caseItem.description)}}</span>` : ""}}
             </span>
@@ -845,7 +858,7 @@ def render_export_html(data: dict[str, Any]) -> str:
             </span>
             <span class="case-type-cell">${{escapeHtml(caseItem.type)}}</span>
             <span class="case-tags-cell"><span class="tag-list">${{tags}}</span></span>
-            <span class="case-actions-cell"><span class="case-action-text">Review</span></span>
+            <span class="case-actions-cell"><span class="case-action-text">${{t("Review")}}</span></span>
           </button>
           <div class="case-body">
             <div class="detail-grid">
@@ -860,9 +873,9 @@ def render_export_html(data: dict[str, Any]) -> str:
             <aside class="review-panel">
               <label class="mark-row">
                 <input type="checkbox" data-review-mark="${{escapeAttr(key)}}" ${{marked ? "checked" : ""}}>
-                <span>Mark</span>
+                <span>${{t("Mark")}}</span>
               </label>
-              <textarea data-review-notes="${{escapeAttr(key)}}" placeholder="Describe what should be updated">${{escapeHtml(review.notes)}}</textarea>
+              <textarea data-review-notes="${{escapeAttr(key)}}" placeholder="${{t("Describe what should be updated")}}">${{escapeHtml(review.notes)}}</textarea>
             </aside>
           </div>
         </article>`;
@@ -870,8 +883,8 @@ def render_export_html(data: dict[str, Any]) -> str:
 
     function detailList(title, items, ordered) {{
       const tag = ordered ? "ol" : "ul";
-      const rows = items.length ? items.map((item) => `<li>${{escapeHtml(item)}}</li>`).join("") : '<li class="empty-detail">None</li>';
-      return `<section class="detail-section"><h5>${{detailIcon(title)}}<span>${{escapeHtml(title)}}</span></h5><${{tag}}>${{rows}}</${{tag}}></section>`;
+      const rows = items.length ? items.map((item) => `<li>${{escapeHtml(item)}}</li>`).join("") : `<li class="empty-detail">${{t("None")}}</li>`;
+      return `<section class="detail-section"><h5>${{detailIcon(title)}}<span>${{escapeHtml(t(title))}}</span></h5><${{tag}}>${{rows}}</${{tag}}></section>`;
     }}
 
     function detailIcon(title) {{
@@ -950,8 +963,8 @@ def render_export_html(data: dict[str, Any]) -> str:
 
     function filterLabel() {{
       const parts = [];
-      if (exportData.filters.priorities.length) parts.push("priorities: " + exportData.filters.priorities.join(", "));
-      if (exportData.filters.tags.length) parts.push("tags: " + exportData.filters.tags.join(", "));
+      if (exportData.filters.priorities.length) parts.push(t("priorities: ") + exportData.filters.priorities.join(", "));
+      if (exportData.filters.tags.length) parts.push(t("tags: ") + exportData.filters.tags.join(", "));
       return parts.length ? " - " + parts.join(" - ") : "";
     }}
 
